@@ -138,16 +138,29 @@ class Parser:
                     self.error('unexpected close bracket')
                 return content
             elif current == '[':
-                content.append( self.parseBlock() )
                 self.next()
+                if self.getCurrent() == '*':
+                    self.parseComment()
+                else:
+                    content.append( self.parseBlock() )
             else:
                 if self.brackets != 0:
                     self.error('unbalanced brackets')
                 return content
 
+    def parseComment(self):
+        while True:
+            self.readUntil('*')
+            self.next()
+            current = self.getCurrent()
+            if current == ']':
+                self.next()
+                break
+            elif current == self.EOF:
+                self.error('unfinished comment')
+
+
     def parseBlock(self):
-        self.check('[')
-        self.next()
         name = self.readWhileRe(self.RE_INDENT)
         if not name:
             self.error('no name')
@@ -157,6 +170,7 @@ class Parser:
             pname = '@'
             current = self.getCurrent()
             if current == ']':
+                self.next()
                 break
             elif current != '[':
                 pname = self.readWhileRe(self.RE_PARAM)
@@ -216,7 +230,6 @@ class Interpreter:
         return u''.join(interpretBlockContent(self.markup, self))
 
     def getBlockContent(self, name):
-        print 'lookup', name, self.context
         names = name.split('.')
         fname, rname = names[0], names[1:]
 
