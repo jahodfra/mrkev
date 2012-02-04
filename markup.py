@@ -320,22 +320,17 @@ class TestInterpretation(TestCase):
 
     def testDefineTemplate(self):
         code = '''
-        [=
-            Header=[
+        [Html :=[
+            <html>[Header][Body]</html>
+            ] Header=[
                 <head><title>[Title]</title></head>
-            ]
-
-            Body=[
+            ] Body=[
                 <body>[@]</body>
-            ]
-
-            Html=[
-                <html>[Header][Body]</html>
             ]
         ]
         [Html Title=[New page] [Hello world!]]
         '''
-        self.assertEqual(MarkupTemplate().render(code), ' <html><head><title>New page</title></head><body>Hello world!</body></html>')
+        self.assertEqual(MarkupTemplate().render(code), ' <html><head><title>New page</title></head><body>Hello world!</body></html> ')
 
     def testNotFound(self):
         code = '[a] [b c=[d]]'
