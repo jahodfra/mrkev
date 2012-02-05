@@ -65,8 +65,10 @@ class MarkupBlock(object):
     def apply(self, interpreter):
         content = interpreter.getBlockContent(self.name)
         interpreter.setContext(self.name, self.params)
-        if isinstance(content, list):
+        if isinstance(content, BlockContent):
             res = u''.join(interpretBlockContent(content, interpreter))
+        elif isinstance(content, (list, tuple)):
+            res = content
         elif isinstance(content, (basestring, int, float)):
             res = unicode(content)
         elif callable(content):
@@ -92,9 +94,12 @@ class MarkupSyntaxError(Exception):
     def __str__(self):
         return '%s\n  File "%s", line %d\n    %s\n    %s' % (self.msg, self.filename, self.lineno, self.line, ' '*(self.pos - 1) + '^')
 
+class BlockContent(list):
+    pass
+
 class Parser:
     RE_INDENT = re.compile('[a-zA-Z0-9_\.=@]')
-    RE_PARAM = re.compile('[a-zA-Z0-9_]')
+    RE_PARAM = re.compile('[a-zA-Z0-9_\:]')
     RE_WHITESPACE = re.compile(r'[\r\n\t ]+')
 
     class EndOfLineType:
@@ -120,7 +125,15 @@ class Parser:
         raise MarkupSyntaxError(msg, self.lineno, self.pos, self.lines[self.lineno - 1], self.filename)
 
     def parseContent(self):
-        content = []
+        def removeEndingSpace(content):
+            if content and not isinstance(content[-1], MarkupBlock):
+                end = content[-1].rstrip()
+                if end:
+                    content[-1] = end
+                else:
+                    del content[-1]
+
+        content = BlockContent()
         first = True
         while True:
             if first:
@@ -136,6 +149,7 @@ class Parser:
             if current == ']':
                 if self.brackets == 0:
                     self.error('unexpected close bracket')
+                removeEndingSpace(content)
                 return content
             elif current == '[':
                 self.next()
@@ -146,6 +160,7 @@ class Parser:
             else:
                 if self.brackets != 0:
                     self.error('unbalanced brackets')
+                removeEndingSpace(content)
                 return content
 
     def parseComment(self):
@@ -222,6 +237,7 @@ def parse(s):
     return Parser(s).parse()
 
 class Interpreter:
+    MISSING_CONTENT = u'[not found]'
     def __init__(self, markup, builtins):
         self.markup = markup
         self.context = [builtins]
@@ -242,7 +258,7 @@ class Interpreter:
                     if not obj:
                         return u'[not found]'
                 return obj
-        return u'[not found]'
+        return self.MISSING_CONTENT
 
     def setContext(self, name, c):
         self.context.insert(0, c)
@@ -250,15 +266,28 @@ class Interpreter:
     def delContext(self):
         del self.context[0]
 
+    #TODO: should support default values
     def getValue(self, name):
         v = self.getBlockContent(name)
-        if isinstance(v, list):
+        if isinstance(v, BlockContent):
             #prevent recursion
-            block = self.context[0][name]
-            del self.context[0][name]
-            v = interpretBlockContent(v, self)
-            self.context[0][name] = block
+            if name in self.context[0]:
+                block = self.context[0][name]
+                del self.context[0][name]
+                v = interpretBlockContent(v, self)
+                self.context[0][name] = block
+            else:
+                #TODO: block defining scope should prevent recursion
+                v = interpretBlockContent(v, self)
         return v
+
+    def getBooleanValue(self, name):
+        v = self.getValue(name)
+        return bool(v and v[0] is True)
+
+
+    def getStringValue(self, name):
+        return ''.join(self.getValue(name))
 
 
 class MethodWrapper:
@@ -267,21 +296,54 @@ class MethodWrapper:
         self.f = f
 
     def __call__(self, interpreter):
-        params = dict((a, ''.join(interpreter.getValue(a))) for a in self.args)
+        params = dict((a, interpreter.getStringValue(a)) for a in self.args)
         return self.f(**params)
 
 
 class MarkupTemplate():
     def __init__(self, **kwargs):
-        self.params = kwargs
-        self.params['lt'] = u'['
-        self.params['gt'] = u']'
+        self.params = {
+            'lt': u'[',
+            'gt': u']',
+            'NbSp': '&amp;',
+            'Sp': ' ',
+        }
+        self.params.update(kwargs)
 
     def render(self, templateCode):
         #find all methods starting with m[A-Z].*
         callables = ((k[1:], MethodWrapper(getattr(self, k))) for k in dir(self) if callable(getattr(self, k)) and len(k) > 2 and k[0] == 'm' and k[1].isupper())
         builtins = dict((k, v) for k, v in chain(self.params.items(), callables))
+        builtins['List'] = self.List
+        builtins['If'] = self.If
         return Interpreter(parse(templateCode), builtins).eval()
+
+    def List(self, interpreter):
+        seq = interpreter.getValue('Seq')
+        if seq and hasattr(seq[0], '__iter__') and len(seq[0]) > 0:
+            items = seq[0]
+            itemContext = {
+                'Last':  lambda interpreter: itemContext['Order'] == len(items),
+                'First': lambda interpreter: itemContext['Order'] == 1,
+                'Even':  lambda interpreter: itemContext['Order'] % 2 == 0,
+                'Odd':   lambda interpreter: itemContext['Order'] % 2 == 1,
+            }
+            interpreter.setContext('List', itemContext)
+            res = []
+            for i, x in enumerate(items):
+                itemContext['Order'] = i + 1
+                itemContext['Item'] = x
+                res.append(interpreter.getStringValue('@'))
+            interpreter.delContext()
+            return ''.join(res)
+        else:
+            return interpreter.getStringValue('IfEmpty')
+
+    def If(self, interpreter):
+        if interpreter.getBooleanValue('@'):
+            return interpreter.getStringValue('Then')
+        return u''
+
 
 
 class TestParsing(TestCase):
@@ -292,7 +354,7 @@ class TestParsing(TestCase):
 
         parseTree = [use('for', {
             'list': [use('enumerate', {'list': [use('customers')]})],
-            'template': [use('order'), '. ', use('name'), ' ']
+            'template': [use('order'), '. ', use('name')]
         })]
         self.assertEqual(parse('''[for list=[[enumerate list=[[customers]]]] template=[
             [order]. [name]
@@ -313,10 +375,10 @@ class TestInterpretation(TestCase):
     def testList(self):
         code = '''
         <ul>[List Seq=[[Literature]] [
-            <li [If [Last] Then=[class="last"]]>[Order]. [Item]</li>
+            <li[If [[Last]] Then=[[Sp]class="last"]]>[Order]. [Item]</li>
         ]]</ul>
         '''
-        self.assertEqual(MarkupTemplate(literature=[u'Shakespear', u'Čapek']).render(code), u'<ul><li>1. Shakespear</li><li class="last">2. Čapek</li></ul>')
+        self.assertEqual(MarkupTemplate(Literature=[u'Shakespear', u'Čapek']).render(code), u'<ul><li>1. Shakespear</li><li class="last">2. Čapek</li></ul>')
 
     def testDefineTemplate(self):
         code = '''
@@ -330,7 +392,7 @@ class TestInterpretation(TestCase):
         ]
         [Html Title=[New page] [Hello world!]]
         '''
-        self.assertEqual(MarkupTemplate().render(code), ' <html><head><title>New page</title></head><body>Hello world!</body></html> ')
+        self.assertEqual(MarkupTemplate().render(code), '<html><head><title>New page</title></head><body>Hello world!</body></html>')
 
     def testNotFound(self):
         code = '[a] [b c=[d]]'
