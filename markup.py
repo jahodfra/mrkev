@@ -42,13 +42,11 @@ Grammar:
 '''
 
 from itertools import chain
-from unittest import TestCase
+from collections import deque
+import unittest
 import inspect
 import re
 import unittest
-
-def interpretBlockContent(content, interpreter):
-    return [part.apply(interpreter) if hasattr(part, 'apply') else part for part in content]
 
 
 class MarkupBlock(object):
@@ -62,26 +60,6 @@ class MarkupBlock(object):
     def __repr__(self):
         return 'use(%s, %s)' % (self.name, self.params)
 
-    def apply(self, interpreter):
-        content = interpreter.getBlockContent(self.name)
-        interpreter.setContext(self.name, self.params)
-        if isinstance(content, BlockContent):
-            res = u''.join(interpretBlockContent(content, interpreter))
-        elif isinstance(content, (list, tuple)):
-            res = content
-        elif isinstance(content, (basestring, int, float)):
-            res = unicode(content)
-        elif callable(content):
-            res = content(interpreter)
-        else:
-            raise AttributeError('block name=%s has unknown type %s' % (content, type(content)))
-        interpreter.delContext()
-        return res
-
-    def get(self, k):
-        return self.params.get(k)
-
-
 class MarkupSyntaxError(Exception):
     def __init__(self, msg, lineno, pos, line, filename):
         Exception.__init__(self, msg)
@@ -94,13 +72,9 @@ class MarkupSyntaxError(Exception):
     def __str__(self):
         return '%s\n  File "%s", line %d\n    %s\n    %s' % (self.msg, self.filename, self.lineno, self.line, ' '*(self.pos - 1) + '^')
 
-class BlockContent(list):
-    pass
-
 class Parser:
-    RE_INDENT = re.compile('[a-zA-Z0-9_\.=@]')
+    RE_INDENT = re.compile('[a-zA-Z0-9_\.=@\!]')
     RE_PARAM = re.compile('[a-zA-Z0-9_\:]')
-    RE_WHITESPACE = re.compile(r'[\r\n\t ]+')
 
     class EndOfLineType:
         def __str__(self):
@@ -125,31 +99,15 @@ class Parser:
         raise MarkupSyntaxError(msg, self.lineno, self.pos, self.lines[self.lineno - 1], self.filename)
 
     def parseContent(self):
-        def removeEndingSpace(content):
-            if content and not isinstance(content[-1], MarkupBlock):
-                end = content[-1].rstrip()
-                if end:
-                    content[-1] = end
-                else:
-                    del content[-1]
-
-        content = BlockContent()
-        first = True
+        content = []
         while True:
-            if first:
-                #remove leading whitespace
-                self.readSpace()
-                first = False
             skip = self.readUntil('[]')
             if skip:
-                #replace longer whitespace with one space
-                skip = self.RE_WHITESPACE.sub(' ', skip)
                 content.append(skip)
             current = self.getCurrent()
             if current == ']':
                 if self.brackets == 0:
                     self.error('unexpected close bracket')
-                removeEndingSpace(content)
                 return content
             elif current == '[':
                 self.next()
@@ -160,7 +118,6 @@ class Parser:
             else:
                 if self.brackets != 0:
                     self.error('unbalanced brackets')
-                removeEndingSpace(content)
                 return content
 
     def parseComment(self):
@@ -233,72 +190,226 @@ class Parser:
     def readSpace(self):
         return self.read(lambda c: c.isspace())
 
-def parse(s):
-    return Parser(s).parse()
+
+class BaseValue(object):
+    pass
+
+class StringValue(BaseValue):
+    def __init__(self, s):
+        super(StringValue, self).__init__()
+        self.s = s
+
+    def __call__(self, ip):
+        return self.s if hasattr(self.s, '__iter__') else [self.s]
+
+    def __repr__(self):
+        return '"%s"' % self.s
+
+class BlockCollection(BaseValue):
+    def __init__(self, blocks):
+        super(BlockCollection, self).__init__()
+        self.blocks = blocks
+
+    def __call__(self, ip):
+        res = chain(*[b(ip) for b in self.blocks])
+        return list(res)
+
+    def __repr__(self):
+        return '[%s]' % ', '.join(repr(b) for b in self.blocks)
+
+class UseBlock(BaseValue):
+    def __init__(self, name, default):
+        super(UseBlock, self).__init__()
+        self.name = name
+        self.default = default
+
+    def __call__(self, ip):
+        blocks, context = ip.find(self.name)
+        if blocks:
+            res = ip.useBlock(self.name, blocks, context)
+        else:
+            res = self.default(ip)
+        return res
+
+    def __repr__(self):
+        return '[%s|%s]' % (self.name, self.default)
+
+class DefineBlock(BaseValue):
+    def __init__(self, params, content):
+        super(DefineBlock, self).__init__()
+        self.params = params
+        self.content = content
+
+    def __call__(self, ip):
+        ip.setContext(Context(self.params))
+        value = self.content(ip)
+        ip.delContext()
+        return value
+
+    def __repr__(self):
+        return '[def %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self.params.items()), self.content)
+
+class Context(dict):
+    def __hash__(self):
+        return id(self)
+
+class CustomContext:
+    def __init__(self, d):
+        self.d = d
+
+    def get(self, name):
+        parts = name.split('.')
+        fname, dictPath = parts[0], parts[1:]
+        obj = self.d.get(fname)
+        if obj:
+            dictPath.reverse()
+            while dictPath and obj:
+                obj = obj.get(dictPath.pop(), None)
+            if not callable(obj):
+                if hasattr(obj, '__iter__'):
+                    return lambda ip: obj
+                else:
+                    return lambda ip: [obj]
+            return obj
+        return None
 
 class Interpreter:
-    MISSING_CONTENT = u'[not found]'
+    MISSING_MSG = '[%s not found]'
+    #greater limit than python stack size will lead to exceptions
+    RECURRENCE_LIMIT = 30
+
     def __init__(self, markup, builtins):
-        self.markup = markup
-        self.context = [builtins]
+        self.markup = Parser(markup).parse()
+        self.context = deque([CustomContext(builtins)])
+        self.visited = set()
+        self.useCount = 0
 
     def eval(self):
-        return u''.join(interpretBlockContent(self.markup, self))
+        ast = self.translate(self.markup)
+        return ''.join(unicode(s) for s in ast(self))
 
-    def getBlockContent(self, name):
-        names = name.split('.')
-        fname, rname = names[0], names[1:]
-
+    def find(self, name):
         for c in self.context:
-            if fname in c:
-                obj = c[fname]
-                while rname:
-                    obj = obj.get(rname[0])
-                    rname = rname[1:]
-                    if not obj:
-                        return u'[not found]'
-                return obj
-        return self.MISSING_CONTENT
+            if (c, name) not in self.visited:
+                value = c.get(name)
+                if value is not None:
+                    return value, c
+        return None, None
 
-    def setContext(self, name, c):
-        self.context.insert(0, c)
+    def useBlock(self, name, blocks, context):
+        if hasattr(blocks, 'selfContainable'):
+            self.useCount += 1
+            if self.useCount > self.RECURRENCE_LIMIT:
+                return '[recurrence limit for %s]' % name
+            res = blocks(self)
+            self.useCount -= 1
+        else:
+            self.visited.add((context, name))
+            res = blocks(self)
+            self.visited.discard((context, name))
+        return res
+
+    def translate(self, blocks):
+        if isinstance(blocks, list):
+            isDefinition = lambda b: isinstance(b, MarkupBlock) and ':' in b.params
+            definitions = [b for b in blocks if isDefinition(b)]
+            usages = [b for b in blocks if not isDefinition(b)]
+            content = self.translateContent(usages)
+            if definitions:
+                return DefineBlock(dict((b.name, self.translateDefinition(b)) for b in definitions), content)
+            else:
+                return content
+
+    RE_WHITESPACE = re.compile(r'[\r\n\t ]+')
+    def translateContent(self, blocks):
+        def replaceSpace(s):
+            #replace longer whitespace with one space
+            return self.RE_WHITESPACE.sub(' ', s)
+
+        def stripString(b, isFirst, prevString):
+            if isFirst:
+                b = b.lstrip()
+                if not b:
+                    #skip first string if it is whitespace
+                    return None
+            elif prevString:
+                if b.isspace():
+                    #skip whitespace after any string
+                    return None
+                else:
+                    #join following strings
+                    b = prevString + b
+                    seq.pop()
+            return StringValue(replaceSpace(b))
+
+        seq = []
+        for b in blocks:
+            if isinstance(b, basestring):
+                item = stripString(b, not seq, seq[-1].s if seq and isinstance(seq[-1], StringValue) else None)
+                if item is None:
+                    continue
+            else:
+                useBlock = UseBlock(b.name, StringValue(self.MISSING_MSG % b.name))
+                if b.params:
+                    params = dict((p, self.translate(value)) for p, value in b.params.items())
+                    item = DefineBlock(params, useBlock)
+                else:
+                    item = useBlock
+            seq.append(item)
+        if seq and isinstance(seq[-1], StringValue):
+            s = seq[-1].s.rstrip()
+            if not s:
+                seq.pop()
+            else:
+                seq[-1].s = s
+        if len(seq) == 1:
+            return seq[0]
+        else:
+            return BlockCollection(seq)
+
+    def translateDefinition(self, block):
+        content = self.translate(block.params[':'])
+        if len(block.params) > 1:
+            res = DefineBlock(dict((p, UseBlock(p, self.translate(c))) for p, c in block.params.items()), content)
+        else:
+            res = content
+        res.selfContainable = True
+        return res
+
+    def setContext(self, c):
+        self.context.appendleft(c)
 
     def delContext(self):
-        del self.context[0]
+        self.context.popleft()
 
-    #TODO: should support default values
-    def getValue(self, name):
-        v = self.getBlockContent(name)
-        if isinstance(v, BlockContent):
-            #prevent recursion
-            if name in self.context[0]:
-                block = self.context[0][name]
-                del self.context[0][name]
-                v = interpretBlockContent(v, self)
-                self.context[0][name] = block
-            else:
-                #TODO: block defining scope should prevent recursion
-                v = interpretBlockContent(v, self)
-        return v
-
-    def getBooleanValue(self, name):
-        v = self.getValue(name)
-        return bool(v and v[0] is True)
-
+    def getValue(self, name, ifMissing=None):
+        v, context = self.find(name)
+        if v:
+            res = self.useBlock(name, v, context)
+        else:
+            res = ifMissing if ifMissing is not None else [self.MISSING_MSG % name]
+        return res
 
     def getStringValue(self, name):
-        return ''.join(self.getValue(name))
+        return ''.join(unicode(s) for s in self.getValue(name))
 
+    def getList(self, name):
+        return self.getValue(name, [])
 
-class MethodWrapper:
+    def getBoolean(self, name):
+        res = self.getValue(name, [False])
+        return len(res) > 0 and res[0] is True
+
+class MethodWrapper(BaseValue):
     def __init__(self, f):
+        super(MethodWrapper, self).__init__()
         self.args = [n for n in inspect.getargspec(f).args if n != 'self']
         self.f = f
 
-    def __call__(self, interpreter):
-        params = dict((a, interpreter.getStringValue(a)) for a in self.args)
-        return self.f(**params)
-
+    def __call__(self, ip):
+        formName = lambda a: a if a != 'content' else '@'
+        params = dict((a, ip.getStringValue(formName(a))) for a in self.args)
+        return [self.f(**params)]
 
 class MarkupTemplate():
     def __init__(self, **kwargs):
@@ -313,40 +424,43 @@ class MarkupTemplate():
     def render(self, templateCode):
         #find all methods starting with m[A-Z].*
         callables = ((k[1:], MethodWrapper(getattr(self, k))) for k in dir(self) if callable(getattr(self, k)) and len(k) > 2 and k[0] == 'm' and k[1].isupper())
-        builtins = dict((k, v) for k, v in chain(self.params.items(), callables))
+        builtins = {}
+        builtins.update(self.params)
+        builtins.update(callables)
+
         builtins['List'] = self.List
         builtins['If'] = self.If
-        return Interpreter(parse(templateCode), builtins).eval()
+        return Interpreter(templateCode, builtins).eval()
 
-    def List(self, interpreter):
-        seq = interpreter.getValue('Seq')
-        if seq and hasattr(seq[0], '__iter__') and len(seq[0]) > 0:
-            items = seq[0]
-            itemContext = {
-                'Last':  lambda interpreter: itemContext['Order'] == len(items),
-                'First': lambda interpreter: itemContext['Order'] == 1,
-                'Even':  lambda interpreter: itemContext['Order'] % 2 == 0,
-                'Odd':   lambda interpreter: itemContext['Order'] % 2 == 1,
-            }
-            interpreter.setContext('List', itemContext)
-            res = []
-            for i, x in enumerate(items):
-                itemContext['Order'] = i + 1
-                itemContext['Item'] = x
-                res.append(interpreter.getStringValue('@'))
-            interpreter.delContext()
-            return ''.join(res)
+    def List(self, ip):
+        seq = ip.getList('Seq')
+        if seq:
+            ip.setContext(Context({
+                #do not use for styling, css 2.0 is powerfull enough
+                'Even':  lambda ip: [i % 2 == 1],
+                'First': lambda ip: [i == 0],
+                'Item':  lambda ip: [x],
+                'Last':  lambda ip: [i+1 == len(seq)],
+                'Odd':   lambda ip: [i % 2 == 0],
+                'Order': lambda ip: [i+1],
+            }))
+            res = [ip.getValue('@') for i, x in enumerate(seq)]
+            ip.delContext()
+            return list(chain(*res))
         else:
-            return interpreter.getStringValue('IfEmpty')
+            return ip.getStringValue('IfEmpty')
 
-    def If(self, interpreter):
-        if interpreter.getBooleanValue('@'):
-            return interpreter.getStringValue('Then')
-        return u''
+    def If(self, ip):
+        if ip.getBoolean('@'):
+            return ip.getValue('Then', [])
+        else:
+            return ip.getValue('Else', [])
 
 
+def parse(s):
+    return Parser(s).parse()
 
-class TestParsing(TestCase):
+class TestParsing(unittest.TestCase):
     def testParse(self):
         use = MarkupBlock
         parseTree = [use('import', {'@': ['guideline']})]
@@ -356,13 +470,11 @@ class TestParsing(TestCase):
             'list': [use('enumerate', {'list': [use('customers')]})],
             'template': [use('order'), '. ', use('name')]
         })]
-        self.assertEqual(parse('''[for list=[[enumerate list=[[customers]]]] template=[
-            [order]. [name]
-        ]]'''), parseTree)
+        self.assertEqual(parse('''[for list=[[enumerate list=[[customers]]]] template=[[order]. [name]]]'''), parseTree)
         self.assertRaises(MarkupSyntaxError, lambda: parse('[a x= []]'))
 
 
-class TestInterpretation(TestCase):
+class TestInterpretation(unittest.TestCase):
     def testPlaceVariable(self):
         self.assertEqual(MarkupTemplate(name='world').render('Hello [name]!'), 'Hello world!')
 
@@ -375,7 +487,7 @@ class TestInterpretation(TestCase):
     def testList(self):
         code = '''
         <ul>[List Seq=[[Literature]] [
-            <li[If [[Last]] Then=[[Sp]class="last"]]>[Order]. [Item]</li>
+            <li[*just an example better use css selector*][If [[Last]] Then=[[Sp]class="last"]]>[Order]. [Item]</li>
         ]]</ul>
         '''
         self.assertEqual(MarkupTemplate(Literature=[u'Shakespear', u'Čapek']).render(code), u'<ul><li>1. Shakespear</li><li class="last">2. Čapek</li></ul>')
@@ -396,14 +508,34 @@ class TestInterpretation(TestCase):
 
     def testNotFound(self):
         code = '[a] [b c=[d]]'
-        self.assertEqual(MarkupTemplate().render(code), '[not found] [not found]')
+        self.assertEqual(MarkupTemplate().render(code), '[a not found] [b not found]')
 
     def testRecursion(self):
-        class TestingTemplate(MarkupTemplate):
-            def mGreeting(self, name):
-                return u'Hello %s!' % name
-        code = '[Greeting name=[[name]]]'
-        self.assertEqual(TestingTemplate().render(code), 'Hello [not found]!')
+        code = '''
+        [Greeting:=[Hello [name]!]]
+        [Greeting name=[[name]]]
+        '''
+        self.assertEqual(MarkupTemplate().render(code), 'Hello [name not found]!')
+
+    def testRecursion2(self):
+        #note that same definition c is used multiple times while evaluating itself
+        #see selfContainable property
+        code = '''
+        [c:=[[@]]]
+        [c name=[a] [
+            [c name=[[name]b] [
+                [c name=[[name]c] [
+                    Hello [name]!
+                ]]
+            ]]
+        ]]
+        '''
+        self.assertEqual(MarkupTemplate().render(code), 'Hello abc!')
+
+    def testRecursion3(self):
+        #selfContainable property enables infinite recursion, this test ensures, that program has some limit on it
+        code = '[c:=[[c]]][c]'
+        self.assertEqual(MarkupTemplate().render(code), '[recurrence limit for c]')
 
     def testContent(self):
         code = '[user.nickname]([user.age])'
@@ -418,6 +550,9 @@ class TestInterpretation(TestCase):
 
 
 if __name__ == '__main__':
+    suite = unittest.TestSuite()
+    suite.addTest(TestInterpretation('testRecursion'))
+    #unittest.TextTestRunner().run(suite)
     unittest.main()
 
 
