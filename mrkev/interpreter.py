@@ -129,11 +129,8 @@ class Interpreter:
             res = ifMissing if ifMissing is not None else [self.MISSING_MSG % name]
         return res
 
-    def getStringValue(self, name):
-        return ''.join(unicode(s) for s in self.getValue(name))
-
-    def getList(self, name):
-        return self.getValue(name, [])
+    def getString(self, name):
+        return ''.join(unicode(s) for s in self.getValue(name, []))
 
     def getBoolean(self, name):
         res = self.getValue(name, [False])
@@ -147,7 +144,7 @@ class MethodWrapper(BaseValue):
 
     def __call__(self, ip):
         formName = lambda a: a if a != 'content' else '@'
-        params = dict((a, ip.getStringValue(formName(a))) for a in self.args)
+        params = dict((a, ip.getString(formName(a))) for a in self.args)
         return [self.f(**params)]
 
 class Template():
@@ -162,16 +159,18 @@ class Template():
     def render(self, templateCode):
         #find all methods starting with m[A-Z].*
         callables = ((k[1:], MethodWrapper(getattr(self, k))) for k in dir(self) if callable(getattr(self, k)) and len(k) > 2 and k[0] == 'm' and k[1].isupper())
-        builtins = {}
+        builtins = {
+            'List': self.List,
+            'If': self.If,
+        }
         builtins.update(self.params)
         builtins.update(callables)
 
-        builtins['List'] = self.List
-        builtins['If'] = self.If
         return Interpreter(templateCode, builtins).eval()
 
     def List(self, ip):
-        seq = ip.getList('Seq')
+        seq = ip.getValue('Seq', [])
+        sep = ip.getString('Sep')
         if seq:
             ip.setContext(CustomContext({
                 #do not use for styling, css 2.0 is powerfull enough
@@ -182,11 +181,23 @@ class Template():
                 'Odd':   lambda ip: [i % 2 == 0],
                 'Order': lambda ip: [i+1],
             }))
-            res = [ip.getValue('@') for i, x in enumerate(seq)]
+            if sep:
+                res = list(chain(*[(ip.getValue('@'), sep) for i, x in enumerate(seq)]))
+            else:
+                res = [ip.getValue('@') for i, x in enumerate(seq)]
             ip.delContext()
             return list(chain(*res))
         else:
-            return ip.getStringValue('IfEmpty')
+            return ip.getValue('IfEmpty', [])
+
+    def Split(self, ip):
+        content = ip.getString('@')
+        sep = ip.getString('Sep')
+        if sep:
+            res = content.split(sep)
+        else:
+            res = [content]
+        return res
 
     def If(self, ip):
         if ip.getBoolean('@'):
