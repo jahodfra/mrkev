@@ -24,8 +24,13 @@ from itertools import chain
 from collections import deque
 import inspect
 import re
+
 from mrkev.parser import Parser
-from mrkev.translator import BaseValue, Translator, Context
+from mrkev.translator import BaseValue, StringValue, BlockCollection, UseBlock, DefineBlock, Translator
+
+class Context(dict):
+    def __hash__(self):
+        return id(self)
 
 class CustomContext:
     def __init__(self, d):
@@ -50,6 +55,8 @@ class CustomContext:
 class Interpreter:
     #greater limit than python stack size will lead to exceptions
     RECURRENCE_LIMIT = 30
+    MISSING_MSG = '[%s not found]'
+
 
     def __init__(self, markup, builtins):
         markup = Parser(markup).parse()
@@ -59,7 +66,7 @@ class Interpreter:
         self.useCount = 0
 
     def eval(self):
-        return ''.join(unicode(s) for s in self.ast(self))
+        return ''.join(unicode(s) for s in self.interpretBlock(self.ast))
 
     def find(self, name):
         for c in self.context:
@@ -69,16 +76,42 @@ class Interpreter:
                     return value, c
         return None, None
 
-    def useBlock(self, name, blocks, context):
-        if hasattr(blocks, 'selfContainable'):
+    def interpretBlock(self, block):
+        if isinstance(block, StringValue):
+            res = block.s if hasattr(block.s, '__iter__') else [block.s]
+
+        elif isinstance(block, BlockCollection):
+            res = list(chain(*[self.interpretBlock(b) for b in block.blocks]))
+
+        elif isinstance(block, UseBlock):
+            blocks, context = self.find(block.name)
+            if blocks:
+                res = self.useBlock(block.name, blocks, context)
+            elif block.default is not None:
+                res = self.interpretBlock(block.default)
+            else:
+                res = [self.MISSING_MSG % block.name]
+
+        elif isinstance(block, DefineBlock):
+            self.setContext(Context(block.params))
+            res = self.interpretBlock(block.content)
+            self.delContext()
+
+        else:
+            res = block(self)
+
+        return res
+
+    def useBlock(self, name, block, context):
+        if hasattr(block, 'selfContainable'):
             self.useCount += 1
             if self.useCount > self.RECURRENCE_LIMIT:
                 return '[recurrence limit for %s]' % name
-            res = blocks(self)
+            res = self.interpretBlock(block)
             self.useCount -= 1
         else:
             self.visited.add((context, name))
-            res = blocks(self)
+            res = self.interpretBlock(block)
             self.visited.discard((context, name))
         return res
 
@@ -93,7 +126,7 @@ class Interpreter:
         if v:
             res = self.useBlock(name, v, context)
         else:
-            res = ifMissing if ifMissing is not None else [MISSING_MSG % name]
+            res = ifMissing if ifMissing is not None else [self.MISSING_MSG % name]
         return res
 
     def getStringValue(self, name):
@@ -141,7 +174,7 @@ class Template():
     def List(self, ip):
         seq = ip.getList('Seq')
         if seq:
-            ip.setContext(Context({
+            ip.setContext(CustomContext({
                 #do not use for styling, css 2.0 is powerfull enough
                 'Even':  lambda ip: [i % 2 == 1],
                 'First': lambda ip: [i == 0],

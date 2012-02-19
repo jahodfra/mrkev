@@ -2,8 +2,6 @@ import re
 from itertools import chain
 from mrkev.parser import MarkupBlock
 
-MISSING_MSG = '[%s not found]'
-
 class BaseValue(object):
     pass
 
@@ -11,9 +9,6 @@ class StringValue(BaseValue):
     def __init__(self, s):
         super(StringValue, self).__init__()
         self.s = s
-
-    def __call__(self, ip):
-        return self.s if hasattr(self.s, '__iter__') else [self.s]
 
     def __repr__(self):
         return '"%s"' % self.s
@@ -23,26 +18,14 @@ class BlockCollection(BaseValue):
         super(BlockCollection, self).__init__()
         self.blocks = blocks
 
-    def __call__(self, ip):
-        res = chain(*[b(ip) for b in self.blocks])
-        return list(res)
-
     def __repr__(self):
         return '[%s]' % ', '.join(repr(b) for b in self.blocks)
 
 class UseBlock(BaseValue):
-    def __init__(self, name, default):
+    def __init__(self, name, default=None):
         super(UseBlock, self).__init__()
         self.name = name
         self.default = default
-
-    def __call__(self, ip):
-        blocks, context = ip.find(self.name)
-        if blocks:
-            res = ip.useBlock(self.name, blocks, context)
-        else:
-            res = self.default(ip)
-        return res
 
     def __repr__(self):
         return '[%s|%s]' % (self.name, self.default)
@@ -53,18 +36,8 @@ class DefineBlock(BaseValue):
         self.params = params
         self.content = content
 
-    def __call__(self, ip):
-        ip.setContext(Context(self.params))
-        value = self.content(ip)
-        ip.delContext()
-        return value
-
     def __repr__(self):
         return '[def %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self.params.items()), self.content)
-
-class Context(dict):
-    def __hash__(self):
-        return id(self)
 
 class Translator:
     def translate(self, blocks):
@@ -107,7 +80,7 @@ class Translator:
                 if item is None:
                     continue
             else:
-                useBlock = UseBlock(b.name, StringValue(MISSING_MSG % b.name))
+                useBlock = UseBlock(b.name)
                 if b.params:
                     params = dict((p, self.translate(value)) for p, value in b.params.items())
                     item = DefineBlock(params, useBlock)
