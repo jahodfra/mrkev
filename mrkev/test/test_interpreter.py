@@ -75,5 +75,5 @@ class TestInterpretation(unittest.TestCase):
         self.assertEqual(Template().render(code), 'aaabbb')
 
     def testEscaping(self):
-        self.assertEqual(Template().render('[lt]1[gt]'), '[1]')
+        self.assertEqual(Template().render('[(]1[)]'), '[1]')
 

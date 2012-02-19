@@ -7,7 +7,6 @@ Grammar:
     BLOCK = '[', INDENT, [PARAMS]*, ']'
     PARAMS = IDENT, '=[', CONTENT, ']'
            | '=[', CONTENT, ']'
-
 '''
 
 class MarkupBlock(object):
@@ -34,7 +33,7 @@ class MarkupSyntaxError(Exception):
         return '%s\n  File "%s", line %d\n    %s\n    %s' % (self.msg, self.filename, self.lineno, self.line, ' '*(self.pos - 1) + '^')
 
 class Parser:
-    RE_INDENT = re.compile('[a-zA-Z0-9_\.=@\!]')
+    RE_INDENT = re.compile('[^\[\]\ \:]')
     RE_PARAM = re.compile('[a-zA-Z0-9_\:]')
 
     class EndOfLineType:

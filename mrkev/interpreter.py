@@ -153,10 +153,9 @@ class MethodWrapper(BaseValue):
 class Template():
     def __init__(self, **kwargs):
         self.params = {
-            'lt': u'[',
-            'gt': u']',
-            'NbSp': '&amp;',
-            'Sp': ' ',
+            '(': u'[',
+            ')': u']',
+            'Sp': u' ',
         }
         self.params.update(kwargs)
 
