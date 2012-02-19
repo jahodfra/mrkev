@@ -1,27 +1,31 @@
-= Mrkev =
 Simple markup langage for python
 
-== Features ==
-* runtime safe - no exceptions in runtime (if possible)
-* sandboxed function - template can call only provided functions
-* simple syntax
-* enables for, if, definition of own template parts
+```python
+import mrkev
+code = '''
+[Html :=[
+    <html>[Header][Body]</html>
+    ] Header=[
+        <head><title>[title]</title></head>
+    ] Body=[
+        <body>[@]</body>
+    ]
+]
+[Html [Hello world!]]
+'''
+print mrkev.Template(title=u'New Page').render(code)
+```
+is converted into
+```html
+<html><head><title>New page</title></head><body>Hello world!</body></html>
+```
 
-== Plan ==
-* Debugging functions
+## Features
+* runtime safe - templates cannot run own python code
+* sandboxed function - template can be extended by new functions and syntax elements
+* simple syntax - only two characters to escape
 
-== Authors ==
-Frantisek Jahoda - implementation, some design choices http://hradlo.blogspot.com
-Tomas Novotny - original idea, syntax http://extbrain.felk.cvut.cz/
+## Authors
+* Frantisek Jahoda - implementation, some design choices - http://hradlo.blogspot.com/
+* Tomas Novotny - original idea, syntax - http://extbrain.felk.cvut.cz/
 
-== License (BSD 3) ==
-Copyright (c) 2012, Frantisek Jahoda
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-
-  * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-  * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-  * Neither the name of the <ORGANIZATION> nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
