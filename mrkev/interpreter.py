@@ -117,7 +117,7 @@ class MethodWrapper(BaseValue):
         params = dict((a, ip.getStringValue(formName(a))) for a in self.args)
         return [self.f(**params)]
 
-class MarkupTemplate():
+class Template():
     def __init__(self, **kwargs):
         self.params = {
             'lt': u'[',
