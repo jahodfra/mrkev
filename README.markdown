@@ -5,17 +5,17 @@ import mrkev
 code = '''
 [Html :=[
     <html>[Header][Body]</html>
-    ] Header=[
-        <head><title>[title]</title></head>
-    ] Body=[
-        <body>[@]</body>
-    ]
-]
+] Header=[
+    <head><title>[title]</title></head>
+] Body=[
+    <body>[@]</body>
+]]
 [Html [Hello world!]]
 '''
 print mrkev.Template(title=u'New Page').render(code)
 ```
 is converted into
+
 ```html
 <html><head><title>New page</title></head><body>Hello world!</body></html>
 ```
