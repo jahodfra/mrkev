@@ -17,7 +17,7 @@ syn match markupUnexpected contained '\w\+'
 
 syn match markupString contained '[^\[\]]\+'
 syn region markupComment matchgroup=markupComment start='\[\*' matchgroup=markupComment end='\*\]'
-syn region markupBlock matchgroup=markupBlock start='\[[a-zA-Z0-9:.]\+' matchgroup=markupBlock end='\]' contains=markupArgument,markupUnexpected
+syn region markupBlock matchgroup=markupBlock start='\[[^\[\] ]\+' matchgroup=markupBlock end='\]' contains=markupArgument,markupUnexpected
 
 syn region markupArgument contained matchgroup=markupArgument start='[a-zA-Z]\+=\[' matchgroup=markupArgument end='\]' contains=@markupBlockContent
 syn region markupArgument contained matchgroup=markupArgument start='\['           matchgroup=markupArgument end='\]' contains=@markupBlockContent
