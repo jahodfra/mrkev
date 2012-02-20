@@ -58,12 +58,15 @@ class Interpreter:
     MISSING_MSG = '[%s not found]'
 
 
-    def __init__(self, markup, builtins):
+    def __init__(self, markup):
         markup = Parser(markup).parse()
         self.ast = Translator().translate(markup)
-        self.context = deque([CustomContext(builtins)])
+        self.context = deque()
         self.visited = set()
         self.useCount = 0
+
+    def setParams(self, builtins):
+        self.context.appendleft(CustomContext(builtins))
 
     def eval(self):
         return ''.join(unicode(s) for s in self.interpretBlock(self.ast))
@@ -148,15 +151,16 @@ class MethodWrapper(BaseValue):
         return [self.f(**params)]
 
 class Template():
-    def __init__(self, **kwargs):
+    def __init__(self, code):
+        self.interpreter = Interpreter(code)
+
+    def render(self, **kwargs):
         self.params = {
             '(': u'[',
             ')': u']',
             'Sp': u' ',
         }
-        self.params.update(kwargs)
-
-    def render(self, templateCode):
+        self.params.update(('#'+k, v) for k, v in kwargs.items())
         #find all methods starting with m[A-Z].*
         callables = ((k[1:], MethodWrapper(getattr(self, k))) for k in dir(self) if callable(getattr(self, k)) and len(k) > 2 and k[0] == 'm' and k[1].isupper())
         builtins = {
@@ -165,8 +169,9 @@ class Template():
         }
         builtins.update(self.params)
         builtins.update(callables)
+        self.interpreter.setParams(builtins)
 
-        return Interpreter(templateCode, builtins).eval()
+        return self.interpreter.eval()
 
     def List(self, ip):
         seq = ip.getValue('Seq', [])
@@ -174,12 +179,12 @@ class Template():
         if seq:
             ip.setContext(CustomContext({
                 #do not use for styling, css 2.0 is powerfull enough
-                'Even':  lambda ip: [i % 2 == 1],
-                'First': lambda ip: [i == 0],
-                'Item':  lambda ip: [x],
-                'Last':  lambda ip: [i+1 == len(seq)],
-                'Odd':   lambda ip: [i % 2 == 0],
-                'Order': lambda ip: [i+1],
+                '$Even':  lambda ip: [i % 2 == 1],
+                '$First': lambda ip: [i == 0],
+                '$Item':  lambda ip: [x],
+                '$Last':  lambda ip: [i+1 == len(seq)],
+                '$Odd':   lambda ip: [i % 2 == 0],
+                '$Order': lambda ip: [i+1],
             }))
             if sep:
                 res = list(chain(*[(ip.getValue('@'), sep) for i, x in enumerate(seq)]))

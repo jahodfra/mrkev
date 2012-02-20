@@ -6,13 +6,13 @@ code = '''
 [Html :=[
     <html>[Header][Body]</html>
 ] Header=[
-    <head><title>[title]</title></head>
+    <head><title>[#title]</title></head>
 ] Body=[
     <body>[@]</body>
 ]]
 [Html [Hello world!]]
 '''
-print mrkev.Template(title=u'New Page').render(code)
+print mrkev.Template(code).render(title=u'New Page')
 ```
 is converted into
 
