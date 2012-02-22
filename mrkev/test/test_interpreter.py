@@ -21,6 +21,27 @@ class TestInterpretation(unittest.TestCase):
         '''
         self.assertEqual(Template(code).render(Literature=[u'Shakespear', u'Čapek']), u'<ul><li>1. Shakespear</li><li class="last">2. Čapek</li></ul>')
 
+    def testList2(self):
+        code = '''
+        [Link :=[<a href="[Target]">[@]</a>]]
+        [List Seq=[[#links]] Sep=[,] [
+            [Link Target=[[$Item.url]] [[$Item.title]]]
+        ]]
+        '''
+        links = [
+            {'url': 'http://a.com', 'title': 'A'},
+            {'url': 'http://b.com', 'title': 'B'},
+        ]
+        self.assertEqual(Template(code).render(links=links), u'<a href="http://a.com">A</a>,<a href="http://b.com">B</a>')
+
+    def testSplit(self):
+        code = '''
+        [List Seq=[[Split [money$makes$money] Sep=[$]]] Sep=[_] [
+            [$Item]
+        ]]
+        '''
+        self.assertEqual(Template(code).render(), u'money_makes_money')
+
     def testDefineTemplate(self):
         code = '''
         [Html :=[
@@ -45,6 +66,28 @@ class TestInterpretation(unittest.TestCase):
         [Greeting name=[[name]]]
         '''
         self.assertEqual(Template(code).render(), 'Hello [name not found]!')
+
+    def testWiki(self):
+        code = '''
+        [Tag :=[<[Name]>[@]</[Name]>]]
+        [p :=[[Tag Name=[p]]]]
+        [h1 :=[[Tag Name=[h1]]]]
+        [ul :=[[Tag Name=[ul]]]
+            Item=[[Tag Name=[li]]]
+        ]
+        [Link :=[<a href="[Target]">[@]</a>]]
+        [> :=[[Link]]]
+
+        [h1 [Lorem ipsum]]
+        [p [Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat volutpat.]]
+        [p [Ut wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper suscipit lobortis nisl ut aliquip ex ea commodo consequat. Duis autem vel eum iriure dolor in hendrerit in vulputate velit esse molestie consequat, vel illum dolore eu feugiat nulla facilisis]]
+        [ul [
+            [.] dolor sit amen
+            [.] wisi enim ad
+            [.] [>~/contacts [contacts]]
+        ]]
+        '''
+        self.assertEqual(Template(code).render(), '')
 
     def testRecursion2(self):
         #note that same definition c is used multiple times while evaluating itself

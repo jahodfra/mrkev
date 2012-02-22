@@ -6,6 +6,7 @@ class BaseValue(object):
     pass
 
 class StringValue(BaseValue):
+    __slots__ = ('s',)
     def __init__(self, s):
         super(StringValue, self).__init__()
         self.s = s
@@ -14,6 +15,7 @@ class StringValue(BaseValue):
         return '"%s"' % self.s
 
 class BlockCollection(BaseValue):
+    __slots__ = ('blocks',)
     def __init__(self, blocks):
         super(BlockCollection, self).__init__()
         self.blocks = blocks
@@ -22,6 +24,7 @@ class BlockCollection(BaseValue):
         return '[%s]' % ', '.join(repr(b) for b in self.blocks)
 
 class UseBlock(BaseValue):
+    __slots__ = ('name', 'default', 'selfContainable')
     def __init__(self, name, default=None):
         super(UseBlock, self).__init__()
         self.name = name
@@ -31,6 +34,7 @@ class UseBlock(BaseValue):
         return '[%s|%s]' % (self.name, self.default)
 
 class DefineBlock(BaseValue):
+    __slots__ = ('params', 'content')
     def __init__(self, params, content):
         super(DefineBlock, self).__init__()
         self.params = params
@@ -74,12 +78,16 @@ class Translator:
             return StringValue(replaceSpace(b))
 
         seq = []
+        if any(isinstance(b, MarkupBlock) and b.name == '.' for b in blocks):
+            blocks = self.translateList(blocks)
         for b in blocks:
             if isinstance(b, basestring):
                 item = stripString(b, not seq, seq[-1].s if seq and isinstance(seq[-1], StringValue) else None)
                 if item is None:
                     continue
             else:
+                if b.name.startswith('>'):
+                    self.translateLink(b)
                 useBlock = UseBlock(b.name)
                 if b.params:
                     params = dict((p, self.translate(value)) for p, value in b.params.items())
@@ -97,6 +105,27 @@ class Translator:
             return seq[0]
         else:
             return BlockCollection(seq)
+
+    def translateLink(self, block):
+        block.params['Target'] = [block.name[1:]]
+        block.name = '>'
+
+
+    def translateList(self, blocks):
+        rest = []
+        result = []
+        for b in reversed(blocks):
+            if isinstance(b, MarkupBlock) and b.name == '.':
+                b.name = 'Item'
+                rest.reverse()
+                b.params['@'] = rest
+                rest = []
+                result.append(b)
+            else:
+                rest.append(b)
+        result.reverse()
+        rest.reverse()
+        return rest + result
 
     def translateDefinition(self, block):
         content = self.translate(block.params[':'])

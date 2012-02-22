@@ -33,17 +33,25 @@ class Context(dict):
         return id(self)
 
 class CustomContext:
-    def __init__(self, d):
+    def __init__(self, ip, d):
         self.d = d
+        self.ip = ip
 
     def get(self, name):
         parts = name.split('.')
         fname, dictPath = parts[0], parts[1:]
         obj = self.d.get(fname)
         if obj:
+            if callable(obj):
+                obj = obj(self.ip)
             dictPath.reverse()
             while dictPath and obj:
-                obj = obj.get(dictPath.pop(), None)
+                if isinstance(obj, list) and len(obj) == 1:
+                    obj = obj[0]
+                if hasattr(obj, 'get'):
+                    obj = obj.get(dictPath.pop(), None)
+                else:
+                    return None
             if not callable(obj):
                 if hasattr(obj, '__iter__'):
                     return lambda ip: obj
@@ -66,7 +74,7 @@ class Interpreter:
         self.useCount = 0
 
     def setParams(self, builtins):
-        self.context.appendleft(CustomContext(builtins))
+        self.context.appendleft(CustomContext(self, builtins))
 
     def eval(self):
         return ''.join(unicode(s) for s in self.interpretBlock(self.ast))
@@ -164,8 +172,9 @@ class Template():
         #find all methods starting with m[A-Z].*
         callables = ((k[1:], MethodWrapper(getattr(self, k))) for k in dir(self) if callable(getattr(self, k)) and len(k) > 2 and k[0] == 'm' and k[1].isupper())
         builtins = {
-            'List': self.List,
             'If': self.If,
+            'List': self.List,
+            'Split': self.Split,
         }
         builtins.update(self.params)
         builtins.update(callables)
@@ -177,7 +186,7 @@ class Template():
         seq = ip.getValue('Seq', [])
         sep = ip.getString('Sep')
         if seq:
-            ip.setContext(CustomContext({
+            ip.setContext(CustomContext(self.interpreter, {
                 #do not use for styling, css 2.0 is powerfull enough
                 '$Even':  lambda ip: [i % 2 == 1],
                 '$First': lambda ip: [i == 0],
@@ -187,7 +196,11 @@ class Template():
                 '$Order': lambda ip: [i+1],
             }))
             if sep:
-                res = list(chain(*[(ip.getValue('@'), sep) for i, x in enumerate(seq)]))
+                res = []
+                for i, x in enumerate(seq):
+                    res.append(ip.getValue('@'))
+                    if i + 1 != len(seq):
+                        res.append(sep)
             else:
                 res = [ip.getValue('@') for i, x in enumerate(seq)]
             ip.delContext()
