@@ -76,7 +76,6 @@ class TestInterpretation(unittest.TestCase):
             Item=[[Tag Name=[li]]]
         ]
         [Link :=[<a href="[Target]">[@]</a>]]
-        [> :=[[Link]]]
 
         [h1 [Lorem ipsum]]
         [p [Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat volutpat.]]

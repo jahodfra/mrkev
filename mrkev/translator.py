@@ -107,8 +107,9 @@ class Translator:
             return BlockCollection(seq)
 
     def translateLink(self, block):
-        block.params['Target'] = [block.name[1:]]
-        block.name = '>'
+        if len(block.name) > 1:
+            block.params['Target'] = [block.name[1:]]
+        block.name = 'Link'
 
 
     def translateList(self, blocks):
