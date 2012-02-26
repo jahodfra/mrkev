@@ -1,5 +1,4 @@
 import re
-from itertools import chain
 from mrkev.parser import MarkupBlock
 
 class UseBlock(object):
