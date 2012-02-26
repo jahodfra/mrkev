@@ -26,7 +26,7 @@ import inspect
 import re
 
 from mrkev.parser import Parser
-from mrkev.translator import BaseValue, StringValue, BlockCollection, UseBlock, DefineBlock, Translator
+from mrkev.translator import BaseValue, BlockCollection, UseBlock, DefineBlock, Translator
 
 class Context(dict):
     def __hash__(self):
@@ -88,8 +88,8 @@ class Interpreter:
         return None, None
 
     def interpretBlock(self, block):
-        if isinstance(block, StringValue):
-            res = block.s if hasattr(block.s, '__iter__') else [block.s]
+        if isinstance(block, basestring):
+            res = [block]
 
         elif isinstance(block, BlockCollection):
             res = list(chain(*[self.interpretBlock(b) for b in block.blocks]))

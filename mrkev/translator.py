@@ -5,15 +5,6 @@ from mrkev.parser import MarkupBlock
 class BaseValue(object):
     pass
 
-class StringValue(BaseValue):
-    __slots__ = ('s',)
-    def __init__(self, s):
-        super(StringValue, self).__init__()
-        self.s = s
-
-    def __repr__(self):
-        return '"%s"' % self.s
-
 class BlockCollection(BaseValue):
     __slots__ = ('blocks',)
     def __init__(self, blocks):
@@ -75,14 +66,14 @@ class Translator:
                     #join following strings
                     b = prevString + b
                     seq.pop()
-            return StringValue(replaceSpace(b))
+            return replaceSpace(b)
 
         seq = []
         if any(isinstance(b, MarkupBlock) and b.name == '.' for b in blocks):
             blocks = self.translateList(blocks)
         for b in blocks:
             if isinstance(b, basestring):
-                item = stripString(b, not seq, seq[-1].s if seq and isinstance(seq[-1], StringValue) else None)
+                item = stripString(b, not seq, seq[-1] if seq and isinstance(seq[-1], basestring) else None)
                 if item is None:
                     continue
             else:
@@ -95,12 +86,12 @@ class Translator:
                 else:
                     item = useBlock
             seq.append(item)
-        if seq and isinstance(seq[-1], StringValue):
-            s = seq[-1].s.rstrip()
+        if seq and isinstance(seq[-1], basestring):
+            s = seq[-1].rstrip()
             if not s:
                 seq.pop()
             else:
-                seq[-1].s = s
+                seq[-1] = s
         if len(seq) == 1:
             return seq[0]
         else:
