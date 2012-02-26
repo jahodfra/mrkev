@@ -26,11 +26,7 @@ import inspect
 import re
 
 from mrkev.parser import Parser
-from mrkev.translator import BaseValue, BlockCollection, UseBlock, DefineBlock, Translator
-
-class Context(dict):
-    def __hash__(self):
-        return id(self)
+from mrkev.translator import UseBlock, DefineBlock, Translator
 
 class CustomContext:
     def __init__(self, ip, d):
@@ -59,6 +55,9 @@ class CustomContext:
                     return lambda ip: [obj]
             return obj
         return None
+
+    def isSelfContainable(self, name):
+        return False
 
 class Interpreter:
     #greater limit than python stack size will lead to exceptions
@@ -91,8 +90,8 @@ class Interpreter:
         if isinstance(block, basestring):
             res = [block]
 
-        elif isinstance(block, BlockCollection):
-            res = list(chain(*[self.interpretBlock(b) for b in block.blocks]))
+        elif isinstance(block, list):
+            res = list(chain(*[self.interpretBlock(b) for b in block]))
 
         elif isinstance(block, UseBlock):
             blocks, context = self.find(block.name)
@@ -104,7 +103,7 @@ class Interpreter:
                 res = [self.MISSING_MSG % block.name]
 
         elif isinstance(block, DefineBlock):
-            self.setContext(Context(block.params))
+            self.setContext(block)
             res = self.interpretBlock(block.content)
             self.delContext()
 
@@ -114,7 +113,7 @@ class Interpreter:
         return res
 
     def useBlock(self, name, block, context):
-        if hasattr(block, 'selfContainable'):
+        if context.isSelfContainable(name):
             self.useCount += 1
             if self.useCount > self.RECURRENCE_LIMIT:
                 return '[recurrence limit for %s]' % name
@@ -147,9 +146,8 @@ class Interpreter:
         res = self.getValue(name, [False])
         return len(res) > 0 and res[0] is True
 
-class MethodWrapper(BaseValue):
+class MethodWrapper(object):
     def __init__(self, f):
-        super(MethodWrapper, self).__init__()
         self.args = [n for n in inspect.getargspec(f).args if n != 'self']
         self.f = f
 

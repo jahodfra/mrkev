@@ -2,20 +2,8 @@ import re
 from itertools import chain
 from mrkev.parser import MarkupBlock
 
-class BaseValue(object):
-    pass
-
-class BlockCollection(BaseValue):
-    __slots__ = ('blocks',)
-    def __init__(self, blocks):
-        super(BlockCollection, self).__init__()
-        self.blocks = blocks
-
-    def __repr__(self):
-        return '[%s]' % ', '.join(repr(b) for b in self.blocks)
-
-class UseBlock(BaseValue):
-    __slots__ = ('name', 'default', 'selfContainable')
+class UseBlock(object):
+    __slots__ = ('name', 'default')
     def __init__(self, name, default=None):
         super(UseBlock, self).__init__()
         self.name = name
@@ -24,15 +12,26 @@ class UseBlock(BaseValue):
     def __repr__(self):
         return '[%s|%s]' % (self.name, self.default)
 
-class DefineBlock(BaseValue):
-    __slots__ = ('params', 'content')
-    def __init__(self, params, content):
+class DefineBlock(object):
+    __slots__ = ('_params', 'content')
+    def __init__(self, content):
         super(DefineBlock, self).__init__()
-        self.params = params
         self.content = content
+        self._params = {}
+
+    def addParam(self, name, value, selfContainable=False):
+        self._params[name] = value, selfContainable
+
+    def get(self, name):
+        v = self._params.get(name)
+        return v[0] if v else None
+
+    def isSelfContainable(self, name):
+        v = self._params.get(name)
+        return v[1] if v else None
 
     def __repr__(self):
-        return '[def %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self.params.items()), self.content)
+        return '[def %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self._params.items()), self.content)
 
 class Translator:
     def translate(self, blocks):
@@ -42,7 +41,10 @@ class Translator:
             usages = [b for b in blocks if not isDefinition(b)]
             content = self.translateContent(usages)
             if definitions:
-                return DefineBlock(dict((b.name, self.translateDefinition(b)) for b in definitions), content)
+                define = DefineBlock(content)
+                for d in definitions:
+                    define.addParam(d.name, self.translateDefinition(d), True)
+                return define
             else:
                 return content
 
@@ -81,8 +83,9 @@ class Translator:
                     self.translateLink(b)
                 useBlock = UseBlock(b.name)
                 if b.params:
-                    params = dict((p, self.translate(value)) for p, value in b.params.items())
-                    item = DefineBlock(params, useBlock)
+                    item = DefineBlock(useBlock)
+                    for p, value in b.params.items():
+                        item.addParam(p, self.translate(value))
                 else:
                     item = useBlock
             seq.append(item)
@@ -95,13 +98,12 @@ class Translator:
         if len(seq) == 1:
             return seq[0]
         else:
-            return BlockCollection(seq)
+            return [seq]
 
     def translateLink(self, block):
         if len(block.name) > 1:
             block.params['Target'] = [block.name[1:]]
         block.name = 'Link'
-
 
     def translateList(self, blocks):
         rest = []
@@ -122,9 +124,10 @@ class Translator:
     def translateDefinition(self, block):
         content = self.translate(block.params[':'])
         if len(block.params) > 1:
-            res = DefineBlock(dict((p, UseBlock(p, self.translate(c))) for p, c in block.params.items()), content)
+            res = DefineBlock(content)
+            for p, c in block.params.items():
+                res.addParam(p, UseBlock(p, self.translate(c)))
         else:
             res = content
-        res.selfContainable = True
         return res
 
