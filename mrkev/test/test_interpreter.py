@@ -86,11 +86,15 @@ class TestInterpretation(unittest.TestCase):
             [.] [>~/contacts [contacts]]
         ]]
         '''
-        result = ' '.join((
-        '<h1>Lorem ipsum</h1>',
-        '<p>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</p>',
-        '<p>Ut wisi enim ad minim veniam, quis nostrud exerci tation</p>',
-        '<ul><li>dolor sit amen</li><li>wisi enim ad</li><li><a href="~/contacts">contacts</a></li></ul>',
+        result = ''.join((
+        '<h1>Lorem ipsum</h1> ',
+        '<p>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</p> ',
+        '<p>Ut wisi enim ad minim veniam, quis nostrud exerci tation</p> ',
+        '<ul>',
+            '<li>dolor sit amen</li>'
+            '<li>wisi enim ad</li>',
+            '<li><a href="~/contacts">contacts</a></li>',
+        '</ul>',
         ))
         self.assertEqual(Template(code).render(), result)
 
