@@ -78,15 +78,21 @@ class TestInterpretation(unittest.TestCase):
         [Link :=[<a href="[Target]">[@]</a>]]
 
         [h1 [Lorem ipsum]]
-        [p [Lorem ipsum dolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh euismod tincidunt ut laoreet dolore magna aliquam erat volutpat.]]
-        [p [Ut wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper suscipit lobortis nisl ut aliquip ex ea commodo consequat. Duis autem vel eum iriure dolor in hendrerit in vulputate velit esse molestie consequat, vel illum dolore eu feugiat nulla facilisis]]
+        [p [Lorem ipsum dolor sit amet, consectetuer adipiscing elit.]]
+        [p [Ut wisi enim ad minim veniam, quis nostrud exerci tation]]
         [ul [
             [.] dolor sit amen
             [.] wisi enim ad
             [.] [>~/contacts [contacts]]
         ]]
         '''
-        self.assertEqual(Template(code).render(), '')
+        result = ' '.join((
+        '<h1>Lorem ipsum</h1>',
+        '<p>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</p>',
+        '<p>Ut wisi enim ad minim veniam, quis nostrud exerci tation</p>',
+        '<ul><li>dolor sit amen</li><li>wisi enim ad</li><li><a href="~/contacts">contacts</a></li></ul>',
+        ))
+        self.assertEqual(Template(code).render(), result)
 
     def testRecursion2(self):
         #note that same definition c is used multiple times while evaluating itself
@@ -118,4 +124,20 @@ class TestInterpretation(unittest.TestCase):
 
     def testEscaping(self):
         self.assertEqual(Template('[(]1[)]').render(), '[1]')
+
+    def testTag(self):
+        code = '''
+            [PairTag name=[a] required=[href,@] optional=[class,id,title] [Link]
+                href=[http://www.example.com]
+                title=[Example Title]
+            ]
+        '''
+        self.assertEqual(Template(code).render(), '<a href="http://www.example.com" title="Example Title">Link</a>')
+        code = '''
+            [EmptyTag name=[a] required=[href] optional=[class,id,title] [Link]
+                href=[http://www.example.com]
+                title=[Example Title]
+            ]
+        '''
+        self.assertEqual(Template(code).render(), '<a href="http://www.example.com" title="Example Title"/>')
 

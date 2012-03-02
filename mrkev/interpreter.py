@@ -156,6 +156,16 @@ class MethodWrapper(object):
         params = dict((a, ip.getString(formName(a))) for a in self.args)
         return [self.f(**params)]
 
+def handleTagExceptions(f):
+    def wrapper(self, ip):
+        try:
+            return f(self, ip)
+        except TagAttributeMissing, e:
+            return ['[required attribute %s is missing]' % e.message]
+        except TagNameMissing:
+            return ['[tag name is missing]']
+    return wrapper
+
 class Template():
     def __init__(self, code):
         self.interpreter = Interpreter(code)
@@ -173,6 +183,8 @@ class Template():
             'If': self.If,
             'List': self.List,
             'Split': self.Split,
+            'PairTag': self.PairTag,
+            'EmptyTag': self.EmptyTag,
         }
         builtins.update(self.params)
         builtins.update(callables)
@@ -221,4 +233,63 @@ class Template():
         else:
             return ip.getValue('Else', [])
 
+    def _getTagAttributes(self, ip):
+        required = ip.getString('required')
+        requiredAttributes = [a.strip() for a in required.split(',')]
+        requiredPairs = [(attribute, ip.getString(attribute))
+            for attribute in requiredAttributes
+        ]
+        for a, v in requiredPairs:
+            if not v:
+                raise TagAttributeMissing(a)
+        optional = ip.getString('optional')
+        optionalAttributes = [a.strip() for a in optional.split(',')]
+        optionalPairs = [(attribute, ip.getString(attribute))
+            for attribute in optionalAttributes
+        ]
+        return list(chain(requiredPairs, optionalPairs))
+
+    def _getTagName(self, ip):
+        name = ip.getString('name').strip()
+        if not name:
+            raise TagNameMissing()
+        return name
+
+    @handleTagExceptions
+    def PairTag(self, ip):
+        name = self._getTagName(ip)
+        attributes = self._getTagAttributes(ip)
+        if any(a == '@' for a, v in attributes):
+            content = dict(attributes)['@']
+            attributes = [(a, v) for a, v in attributes if a != '@']
+        else:
+            content = ip.getString('@')
+        return [''.join(('<', name, joinAttributes(attributes), '>', content, '</', name, '>'))]
+
+    @handleTagExceptions
+    def EmptyTag(self, ip):
+        name = self._getTagName(ip)
+        attributes = self._getTagAttributes(ip)
+        return [''.join(('<', name, joinAttributes(attributes), '/>'))]
+
+
+class TagNameMissing(Exception):
+    pass
+
+class TagAttributeMissing(Exception):
+    def __init__(self, message):
+        Exception.__init__(self)
+        self.message = message
+
+def joinAttributes(attributes):
+    return ''.join(' %s="%s"' % (a, escapeHtml(v))
+        for a, v in attributes if v)
+
+
+def escapeHtml(s):
+    s = s.replace('&', '&amp;')
+    s = s.replace('"', '&quot;')
+    s = s.replace('>', '&gt;')
+    s = s.replace('<', '&lt;')
+    return s
 
