@@ -161,9 +161,13 @@ def handleTagExceptions(f):
         try:
             return f(self, ip)
         except TagAttributeMissing, e:
-            return ['[required attribute %s is missing]' % e.message]
-        except TagNameMissing:
-            return ['[tag name is missing]']
+            message = '[required attribute "%s" is missing]' % e.message
+        except TagNameInvalid, e:
+            if e.message:
+                message = '[tag name "%s" invalid]' % e.message
+            else:
+                message = '[missing tag name]'
+        return [message]
     return wrapper
 
 class Template():
@@ -234,52 +238,55 @@ class Template():
             return ip.getValue('Else', [])
 
     def _getTagAttributes(self, ip):
-        required = ip.getString('required')
-        requiredAttributes = [a.strip() for a in required.split(',')]
-        requiredPairs = [(attribute, ip.getString(attribute))
-            for attribute in requiredAttributes
-        ]
-        for a, v in requiredPairs:
-            if not v:
-                raise TagAttributeMissing(a)
-        optional = ip.getString('optional')
-        optionalAttributes = [a.strip() for a in optional.split(',')]
-        optionalPairs = [(attribute, ip.getString(attribute))
-            for attribute in optionalAttributes
-        ]
+        def parseAttributes(attributeString):
+             attributes = (a for a in attributeString.split(','))
+             attributes = (a.strip() for a in attributes)
+             attributes = (a for a in attributes if a)
+             return attributes
+
+        def evaluateAttributes(attributes):
+            return [(a, ip.getString(a)) for a in attributes]
+
+        def evaluateAttributeList(listName):
+            attrString = ip.getString(listName)
+            attrList = parseAttributes(attrString)
+            return evaluateAttributes(attrList)
+
+        requiredPairs = evaluateAttributeList('Required')
+        missingRequired = [a for a, v in requiredPairs if not v]
+        if missingRequired:
+            raise TagAttributeMissing(missingRequired[0])
+        optionalPairs = evaluateAttributeList('Optional')
         return list(chain(requiredPairs, optionalPairs))
 
     def _getTagName(self, ip):
-        name = ip.getString('name').strip()
-        if not name:
-            raise TagNameMissing()
+        name = ip.getString('Name').strip()
+        if not TAG_NAME_RE.match(name):
+            raise TagNameInvalid(name)
         return name
 
     @handleTagExceptions
     def PairTag(self, ip):
         name = self._getTagName(ip)
         attributes = self._getTagAttributes(ip)
-        if any(a == '@' for a, v in attributes):
-            content = dict(attributes)['@']
-            attributes = [(a, v) for a, v in attributes if a != '@']
-        else:
-            content = ip.getString('@')
-        return [''.join(('<', name, joinAttributes(attributes), '>', content, '</', name, '>'))]
+        content = ip.getValue('@', [])
+        return list(chain(('<', name, joinAttributes(attributes), '>'), content, ('</', name, '>')))
 
     @handleTagExceptions
     def EmptyTag(self, ip):
         name = self._getTagName(ip)
         attributes = self._getTagAttributes(ip)
-        return [''.join(('<', name, joinAttributes(attributes), '/>'))]
+        return ['<', name, joinAttributes(attributes), '/>']
 
+TAG_NAME_RE = re.compile(r'^[a-zA-Z0-9]+(:[a-zA-Z0-9]+)?$')
 
-class TagNameMissing(Exception):
-    pass
-
-class TagAttributeMissing(Exception):
+class TagFormatError(Exception):
     def __init__(self, message):
         Exception.__init__(self)
         self.message = message
+
+class TagNameInvalid(TagFormatError): pass
+class TagAttributeMissing(TagFormatError): pass
 
 def joinAttributes(attributes):
     return ''.join(' %s="%s"' % (a, escapeHtml(v))

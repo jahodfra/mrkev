@@ -69,13 +69,23 @@ class TestInterpretation(unittest.TestCase):
 
     def testWiki(self):
         code = '''
-        [Tag :=[<[Name]>[@]</[Name]>]]
-        [p :=[[Tag Name=[p]]]]
-        [h1 :=[[Tag Name=[h1]]]]
-        [ul :=[[Tag Name=[ul]]]
-            Item=[[Tag Name=[li]]]
-        ]
-        [Link :=[<a href="[Target]">[@]</a>]]
+        [p :=[
+            [PairTag Name=[p]]
+            ]]
+
+        [h1 :=[
+            [PairTag Name=[h1]]
+            ]]
+
+        [ul :=[
+            [PairTag Name=[ul]]
+            ] Item=[[PairTag Name=[li]]
+            ]]
+
+        [Link :=[
+            [PairTag Name=[a] Required=[href]]
+            ] href=[[Target]
+            ]]
 
         [h1 [Lorem ipsum]]
         [p [Lorem ipsum dolor sit amet, consectetuer adipiscing elit.]]
@@ -129,19 +139,38 @@ class TestInterpretation(unittest.TestCase):
     def testEscaping(self):
         self.assertEqual(Template('[(]1[)]').render(), '[1]')
 
-    def testTag(self):
+    def testPairTag(self):
         code = '''
-            [PairTag name=[a] required=[href,@] optional=[class,id,title] [Link]
+            [PairTag Name=[a] Required=[href] Optional=[class,id,title] [Link]
                 href=[http://www.example.com]
                 title=[Example Title]
             ]
         '''
-        self.assertEqual(Template(code).render(), '<a href="http://www.example.com" title="Example Title">Link</a>')
+        res = Template(code).render()
+        self.assertEqual(res, '<a href="http://www.example.com" title="Example Title">Link</a>')
+
+    def testEmptyTag(self):
         code = '''
-            [EmptyTag name=[a] required=[href] optional=[class,id,title] [Link]
+            [EmptyTag Name=[a] Required=[href] Optional=[class,id,title] [Link]
                 href=[http://www.example.com]
                 title=[Example Title]
             ]
         '''
-        self.assertEqual(Template(code).render(), '<a href="http://www.example.com" title="Example Title"/>')
+        res = Template(code).render()
+        self.assertEqual(res, '<a href="http://www.example.com" title="Example Title"/>')
+
+    def TestEmptyTagName(self):
+        code = '[EmptyTag Name=[]]'
+        res = Template(code).render()
+        self.assertEqual(res, '[missing tag name]')
+
+    def TestInvalidTagName(self):
+        code = '[EmptyTag Name=[a:b:c]]'
+        res = Template(code).render()
+        self.assertEqual(res, '[tag name "a:b:c" invalid]')
+
+    def TestTagNameWithNamespace(self):
+        code = '[EmptyTag Name=[Namespace:Tag1]]'
+        res = Template(code).render()
+        self.assertEqual(res, '<Namespace:Tag1/>')
 
