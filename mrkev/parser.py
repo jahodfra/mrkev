@@ -33,8 +33,8 @@ class MarkupSyntaxError(Exception):
         return '%s\n  File "%s", line %d\n    %s\n    %s' % (self.msg, self.filename, self.lineno, self.line, ' '*(self.pos - 1) + '^')
 
 class Parser:
-    RE_INDENT = re.compile('[^\[\]\ \:]')
-    RE_PARAM = re.compile('[a-zA-Z0-9_\:]')
+    RE_IDENT = re.compile(r'[^\[\] \:\n\r\t]')
+    RE_PARAM = re.compile(r'[^\[\] \=\n\r\t]')
 
     class EndOfLineType:
         def __str__(self):
@@ -93,7 +93,7 @@ class Parser:
 
 
     def parseBlock(self):
-        name = self.readWhileRe(self.RE_INDENT)
+        name = self.readWhileRe(self.RE_IDENT)
         if not name:
             self.error('no name')
         params = {}
