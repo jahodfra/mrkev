@@ -49,10 +49,7 @@ class CustomContext:
                 else:
                     return None
             if not callable(obj):
-                if hasattr(obj, '__iter__'):
-                    return lambda ip: obj
-                else:
-                    return lambda ip: [obj]
+                return lambda ip: obj
             return obj
         return None
 
@@ -109,6 +106,8 @@ class Interpreter:
 
         else:
             res = block(self)
+            if not hasattr(res, '__iter__'):
+                res = [res]
 
         return res
 
@@ -154,7 +153,7 @@ class MethodWrapper(object):
     def __call__(self, ip):
         formName = lambda a: a if a != 'content' else '@'
         params = dict((a, ip.getString(formName(a))) for a in self.args)
-        return [self.f(**params)]
+        return self.f(**params)
 
 def handleTagExceptions(f):
     def wrapper(self, ip):
@@ -182,7 +181,9 @@ class Template():
         }
         self.params.update(('#'+k, v) for k, v in kwargs.items())
         #find all methods starting with m[A-Z].*
-        callables = ((k[1:], MethodWrapper(getattr(self, k))) for k in dir(self) if callable(getattr(self, k)) and len(k) > 2 and k[0] == 'm' and k[1].isupper())
+        hasProperNameFormat = lambda k: len(k) > 2 and k[0] == 'm' and k[1].isupper()
+        templateMethods = ((k[1:], getattr(self, k)) for k in dir(self) if callable(getattr(self, k)) and hasProperNameFormat(k))
+        callables = ((name, MethodWrapper(method)) for name, method in templateMethods)
         builtins = {
             'If': self.If,
             'List': self.List,
@@ -202,12 +203,12 @@ class Template():
         if seq:
             ip.setContext(CustomContext(self.interpreter, {
                 #do not use for styling, css 2.0 is powerfull enough
-                '$Even':  lambda ip: [i % 2 == 1],
-                '$First': lambda ip: [i == 0],
-                '$Item':  lambda ip: [x],
-                '$Last':  lambda ip: [i+1 == len(seq)],
-                '$Odd':   lambda ip: [i % 2 == 0],
-                '$Order': lambda ip: [i+1],
+                '$Even':  lambda ip: i % 2 == 1,
+                '$First': lambda ip: i == 0,
+                '$Item':  lambda ip: x,
+                '$Last':  lambda ip: i+1 == len(seq),
+                '$Odd':   lambda ip: i % 2 == 0,
+                '$Order': lambda ip: i+1,
             }))
             if sep:
                 res = []
