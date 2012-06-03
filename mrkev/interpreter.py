@@ -78,9 +78,6 @@ class Interpreter(object):
         self.useCount = 0
         self.errorFormatter = errorFormatter or ErrorFormatter()
 
-    def setParams(self, builtins):
-        self.context.appendleft(CustomContext(self, builtins))
-
     def eval(self):
         return ''.join(unicode(s) for s in self.interpretBlock(self.ast))
 
