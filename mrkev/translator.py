@@ -47,12 +47,7 @@ class Translator:
             else:
                 return content
 
-    RE_WHITESPACE = re.compile(r'[\r\n\t ]+')
     def translateContent(self, blocks):
-        def replaceSpace(s):
-            #replace longer whitespace with one space
-            return self.RE_WHITESPACE.sub(' ', s)
-
         def stripString(b, isFirst, prevString):
             if isFirst:
                 b = b.lstrip()
@@ -67,7 +62,7 @@ class Translator:
                     #join following strings
                     b = prevString + b
                     seq.pop()
-            return replaceSpace(b)
+            return b
 
         seq = []
         if any(isinstance(b, MarkupBlock) and b.name == '.' for b in blocks):

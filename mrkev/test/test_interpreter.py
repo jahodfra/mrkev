@@ -1,5 +1,6 @@
 #encoding: utf-8
 
+import re
 import unittest
 from mrkev.interpreter import Template
 
@@ -68,6 +69,11 @@ class TestInterpretation(unittest.TestCase):
         self.assertEqual(Template(code).render(), 'Hello [name not found]!')
 
     def testWiki(self):
+        RE_WHITESPACE = re.compile(r'[\r\n\t ]+')
+        def replaceSpace(s):
+            #replace longer whitespace with one space
+            return RE_WHITESPACE.sub(' ', s)
+
         code = '''
         [p :=[
             [PairTag Name=[p]]
@@ -96,7 +102,7 @@ class TestInterpretation(unittest.TestCase):
             [.] [>~/contacts [contacts]]
         ]]
         '''
-        result = ''.join((
+        expectedResult = ''.join((
         '<h1>Lorem ipsum</h1> ',
         '<p>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</p> ',
         '<p>Ut wisi enim ad minim veniam, quis nostrud exerci tation</p> ',
@@ -106,7 +112,9 @@ class TestInterpretation(unittest.TestCase):
             '<li><a href="~/contacts">contacts</a></li>',
         '</ul>',
         ))
-        self.assertEqual(Template(code).render(), result)
+        result = Template(code).render()
+        result = replaceSpace(result)
+        self.assertEqual(result, expectedResult)
 
     def testRecursion2(self):
         #note that same definition c is used multiple times while evaluating itself
