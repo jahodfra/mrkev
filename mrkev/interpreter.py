@@ -56,18 +56,27 @@ class CustomContext(object):
     def isSelfContainable(self, name):
         return False
 
+class ErrorFormatter(object):
+    def formatBlockMissing(self, name):
+        return u'[{0} not found]'.format(name)
+
+    def formatRecurrenceLimit(self, name, limit):
+        return u'[recurrence limit for {0}]'.format(name)
+
+
 class Interpreter(object):
     #greater limit than python stack size will lead to exceptions
     RECURRENCE_LIMIT = 30
     MISSING_MSG = '[%s not found]'
 
 
-    def __init__(self, markup):
+    def __init__(self, markup, errorFormatter=None):
         markup = Parser(markup).parse()
         self.ast = Translator().translate(markup)
         self.context = deque()
         self.visited = set()
         self.useCount = 0
+        self.errorFormatter = errorFormatter or ErrorFormatter()
 
     def setParams(self, builtins):
         self.context.appendleft(CustomContext(self, builtins))
@@ -97,7 +106,7 @@ class Interpreter(object):
             elif block.default is not None:
                 res = self.interpretBlock(block.default)
             else:
-                res = [self.MISSING_MSG % block.name]
+                res = [self.errorFormatter.formatBlockMissing(block.name)]
 
         elif isinstance(block, DefineBlock):
             self.setContext(block)
@@ -115,7 +124,7 @@ class Interpreter(object):
         if context.isSelfContainable(name):
             self.useCount += 1
             if self.useCount > self.RECURRENCE_LIMIT:
-                return '[recurrence limit for %s]' % name
+                return [self.errorFormatter.formatRecurrenceLimit(name, self.RECURRENCE_LIMIT)]
             res = self.interpretBlock(block)
             self.useCount -= 1
         else:
@@ -135,7 +144,10 @@ class Interpreter(object):
         if v:
             res = self.useBlock(name, v, context)
         else:
-            res = ifMissing if ifMissing is not None else [self.MISSING_MSG % name]
+            if ifMissing is not None:
+                res = ifMissing
+            else:
+                res = [self.errorFormatter.formatBlockMissing(name)]
         return res
 
     def getString(self, name):
