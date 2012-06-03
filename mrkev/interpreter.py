@@ -28,7 +28,7 @@ import re
 from mrkev.parser import Parser
 from mrkev.translator import UseBlock, DefineBlock, Translator
 
-class CustomContext:
+class CustomContext(object):
     def __init__(self, ip, d):
         self.d = d
         self.ip = ip
@@ -56,7 +56,7 @@ class CustomContext:
     def isSelfContainable(self, name):
         return False
 
-class Interpreter:
+class Interpreter(object):
     #greater limit than python stack size will lead to exceptions
     RECURRENCE_LIMIT = 30
     MISSING_MSG = '[%s not found]'
@@ -169,33 +169,56 @@ def handleTagExceptions(f):
         return [message]
     return wrapper
 
-class Template():
+class Template(object):
+    ''' object for rendering markup which can be extended about parameters and functions
+
+    string based methods has to start with 'm' and continue with upper case letter
+    all parameters are converted to unicode
+    and should return list or unicode
+    e.g.
+    def mHello(self, name):
+        return 'Hello ' + name
+    '''
     def __init__(self, code):
         self.interpreter = Interpreter(code)
 
     def render(self, **kwargs):
-        self.params = {
+        context = self.createContext(kwargs)
+        self.interpreter.setContext(context)
+        return self.interpreter.eval()
+
+    def createContext(self, params):
+        builtins = {}
+        builtins.update(self._getParameters(params))
+        builtins.update(self._getTemplateFunctions())
+        builtins.update(self._getStringBasedMethods())
+        return CustomContext(self.interpreter, builtins)
+
+    def _getParameters(self, params):
+        params = dict(('$'+k, v) for k, v in params.items())
+        params.update({
             '(': u'[',
             ')': u']',
             'Sp': u' ',
-        }
-        self.params.update(('$'+k, v) for k, v in kwargs.items())
+        })
+        return params
+
+    def _getTemplateFunctions(self):
+        return {
+             'If': self.If,
+             'List': self.List,
+             'Split': self.Split,
+             'PairTag': self.PairTag,
+             'EmptyTag': self.EmptyTag,
+         }
+
+        return self.interpreter.eval()
+
+    def _getStringBasedMethods(self):
         #find all methods starting with m[A-Z].*
         hasProperNameFormat = lambda k: len(k) > 2 and k[0] == 'm' and k[1].isupper()
         templateMethods = ((k[1:], getattr(self, k)) for k in dir(self) if callable(getattr(self, k)) and hasProperNameFormat(k))
-        callables = ((name, MethodWrapper(method)) for name, method in templateMethods)
-        builtins = {
-            'If': self.If,
-            'List': self.List,
-            'Split': self.Split,
-            'PairTag': self.PairTag,
-            'EmptyTag': self.EmptyTag,
-        }
-        builtins.update(self.params)
-        builtins.update(callables)
-        self.interpreter.setParams(builtins)
-
-        return self.interpreter.eval()
+        return dict((name, MethodWrapper(method)) for name, method in templateMethods)
 
     def List(self, ip):
         seq = ip.getValue('Seq', [])
