@@ -6,7 +6,7 @@ from mrkev.interpreter import Template
 
 class TestInterpretation(unittest.TestCase):
     def testPlaceVariable(self):
-        self.assertEqual(Template('Hello [#name]!').render(name='world'), 'Hello world!')
+        self.assertEqual(Template('Hello [$name]!').render(name='world'), 'Hello world!')
 
     def testCallFunction(self):
         class TestingTemplate(Template):
@@ -16,7 +16,7 @@ class TestInterpretation(unittest.TestCase):
 
     def testList(self):
         code = '''
-        <ul>[List Seq=[[#Literature]] [
+        <ul>[List Seq=[[$Literature]] [
             <li[*just an example better use css selector*][If [[$Last]] Then=[[Sp]class="last"]]>[$Order]. [$Item]</li>
         ]]</ul>
         '''
@@ -25,7 +25,7 @@ class TestInterpretation(unittest.TestCase):
     def testList2(self):
         code = '''
         [Link :=[<a href="[Target]">[@]</a>]]
-        [List Seq=[[#links]] Sep=[,] [
+        [List Seq=[[$links]] Sep=[,] [
             [Link Target=[[$Item.url]] [[$Item.title]]]
         ]]
         '''
@@ -137,7 +137,7 @@ class TestInterpretation(unittest.TestCase):
         self.assertEqual(Template(code).render(), '[recurrence limit for c]')
 
     def testContent(self):
-        code = '[#user.nickname]([#user.age])'
+        code = '[$user.nickname]([$user.age])'
         self.assertEqual(Template(code).render(user={'nickname': 'spide', 'age': 26}), 'spide(26)')
 
     def testComment(self):

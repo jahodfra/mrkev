@@ -179,7 +179,7 @@ class Template():
             ')': u']',
             'Sp': u' ',
         }
-        self.params.update(('#'+k, v) for k, v in kwargs.items())
+        self.params.update(('$'+k, v) for k, v in kwargs.items())
         #find all methods starting with m[A-Z].*
         hasProperNameFormat = lambda k: len(k) > 2 and k[0] == 'm' and k[1].isupper()
         templateMethods = ((k[1:], getattr(self, k)) for k in dir(self) if callable(getattr(self, k)) and hasProperNameFormat(k))
