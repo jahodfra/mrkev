@@ -240,10 +240,10 @@ class Template():
 
     def _getTagAttributes(self, ip):
         def parseAttributes(attributeString):
-             attributes = (a for a in attributeString.split(','))
-             attributes = (a.strip() for a in attributes)
-             attributes = (a for a in attributes if a)
-             return attributes
+            attributes = (a for a in attributeString.split(','))
+            attributes = (a.strip() for a in attributes)
+            attributes = (a for a in attributes if a)
+            return attributes
 
         def evaluateAttributes(attributes):
             return [(a, ip.getString(a)) for a in attributes]
