@@ -151,8 +151,12 @@ class Interpreter(object):
         return ''.join(unicode(s) for s in self.getValue(name, []))
 
     def getBoolean(self, name):
-        res = self.getValue(name, [False])
-        return len(res) > 0 and res[0] is True
+        '''convert block to boolean
+
+        unknown or empty -> False
+        '''
+        res = self.getValue(name, [])
+        return len(res) > 0 and all(res)
 
 class MethodWrapper(object):
     def __init__(self, f):
