@@ -167,18 +167,59 @@ class TestInterpretation(unittest.TestCase):
         res = Template(code).render()
         self.assertEqual(res, '<a href="http://www.example.com" title="Example Title"/>')
 
-    def TestEmptyTagName(self):
+    def testEmptyTagName(self):
         code = '[EmptyTag Name=[]]'
         res = Template(code).render()
         self.assertEqual(res, '[missing tag name]')
 
-    def TestInvalidTagName(self):
+    def testInvalidTagName(self):
         code = '[EmptyTag Name=[a:b:c]]'
         res = Template(code).render()
         self.assertEqual(res, '[tag name "a:b:c" invalid]')
 
-    def TestTagNameWithNamespace(self):
+    def testTagNameWithNamespace(self):
         code = '[EmptyTag Name=[Namespace:Tag1]]'
         res = Template(code).render()
         self.assertEqual(res, '<Namespace:Tag1/>')
+
+    def testGetBooleanMissingTest(self):
+        code = '[If [[Missing]] Then=[true] Else=[false]]'
+        res = Template(code).render()
+        self.assertEqual(res, 'false')
+
+    def testGetBooleanEmptyTest(self):
+        code = '[If [] Then=[true] Else=[false]]'
+        res = Template(code).render()
+        self.assertEqual(res, 'false')
+
+    def testGetBooleanAndTestTrue(self):
+        code = '[If [[A] [B]] Then=[true] Else=[false]]'
+        res = Template(code).render(a=True, b=True)
+        self.assertEqual(res, 'false')
+
+    def testGetBooleanAndTestFail(self):
+        code = '[If [[A] [B]] Then=[true] Else=[false]]'
+        res = Template(code).render(a=True, b=False)
+        self.assertEqual(res, 'false')
+
+    def testDefaultParameterNotNeeded(self):
+        code = '''
+        [var :=[aaa]]
+        [print :=[
+            [var]
+        ] var=[xxx]]
+        [print]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, 'aaa')
+
+    def testDefaultParameterNeeded(self):
+        code = '''
+        [print :=[
+            [var]
+        ] var=[xxx]]
+        [print]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, 'xxx')
 
