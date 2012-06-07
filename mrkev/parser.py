@@ -1,14 +1,5 @@
 import re
 
-'''
-Grammar:
-    FILE = CONTENT
-    CONTENT = [STR | BLOCK]*
-    BLOCK = '[', INDENT, [PARAMS]*, ']'
-    PARAMS = IDENT, '=[', CONTENT, ']'
-           | '=[', CONTENT, ']'
-'''
-
 class MarkupBlock(object):
     def __init__(self, name, params=None):
         self.name = name
@@ -18,7 +9,8 @@ class MarkupBlock(object):
         return isinstance(o, MarkupBlock) and self.name == o.name and self.params == o.params
 
     def __repr__(self):
-        return 'use(%s, %s)' % (self.name, self.params)
+        params = u', '.join('{0}={1}'.format(k, v) for k, v in self.params.items())
+        return u'{0}({1})'.format(self.name, params)
 
 class MarkupSyntaxError(Exception):
     def __init__(self, msg, lineno, pos, line, filename):
@@ -33,6 +25,14 @@ class MarkupSyntaxError(Exception):
         return '%s\n  File "%s", line %d\n    %s\n    %s' % (self.msg, self.filename, self.lineno, self.line, ' '*(self.pos - 1) + '^')
 
 class Parser:
+    ''' Grammar:
+
+        FILE = CONTENT
+        CONTENT = [STR | BLOCK]*
+        BLOCK = '[', INDENT, [PARAMS]*, ']'
+        PARAMS = IDENT, '=[', CONTENT, ']'
+            | '=[', CONTENT, ']'
+    '''
     RE_IDENT = re.compile(r'[^\[\] \:\n\r\t]')
     RE_PARAM = re.compile(r'[^\[\] \=\n\r\t]')
 
@@ -144,8 +144,8 @@ class Parser:
     def readUntil(self, chars):
         return self.read(lambda c: c not in chars)
 
-    def readWhileRe(self, re):
-        return self.read(lambda c: re.match(c))
+    def readWhileRe(self, regex):
+        return self.read(regex.match)
 
     def readSpace(self):
         return self.read(lambda c: c.isspace())
