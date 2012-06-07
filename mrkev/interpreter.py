@@ -239,12 +239,12 @@ class Template(object):
         if seq:
             ip.setContext(CustomContext(self.interpreter, {
                 #do not use for styling, css 2.0 is powerfull enough
-                '$Even':  lambda ip: i % 2 == 1,
-                '$First': lambda ip: i == 0,
-                '$Item':  lambda ip: x,
-                '$Last':  lambda ip: i+1 == len(seq),
-                '$Odd':   lambda ip: i % 2 == 0,
-                '$Order': lambda ip: i+1,
+                '$Even':  lambda _: i % 2 == 1,
+                '$First': lambda _: i == 0,
+                '$Item':  lambda _: x,
+                '$Last':  lambda _: i+1 == len(seq),
+                '$Odd':   lambda _: i % 2 == 0,
+                '$Order': lambda _: i+1,
             }))
             if sep:
                 res = []

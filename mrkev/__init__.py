@@ -14,4 +14,3 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 from mrkev.interpreter import Template
 from mrkev.parser import MarkupSyntaxError
-

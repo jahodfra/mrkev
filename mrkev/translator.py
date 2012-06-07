@@ -1,4 +1,3 @@
-import re
 from mrkev.parser import MarkupBlock
 
 class UseBlock(object):
