@@ -13,16 +13,31 @@ class MarkupBlock(object):
         return u'{0}({1})'.format(self.name, params)
 
 class MarkupSyntaxError(Exception):
-    def __init__(self, msg, lineno, pos, line, filename):
+    def __init__(self, msg, inputFile):
         Exception.__init__(self, msg)
         self.msg = msg
-        self.lineno = lineno
-        self.pos = pos
-        self.line = line
-        self.filename = filename
+        self.inputFile = inputFile
 
     def __str__(self):
-        return '%s\n  File "%s", line %d\n    %s\n    %s' % (self.msg, self.filename, self.lineno, self.line, ' '*(self.pos - 1) + '^')
+        return '%s\n  File "%s", line %d\n    %s\n    %s' % (self.msg, self.inputFile.name, self.inputFile.lineno + 1, self.inputFile.line, ' '*self.inputFile.pos + '^')
+
+class InputFile:
+    def __init__(self, text, name):
+        self.text = text
+        self.name = name
+        self.pos = 0
+        self.line = ''
+        self.lineno = 0
+
+    def __iter__(self):
+        for lineno, line in enumerate(self.text.split('\n')):
+            self.lineno = lineno
+            self.line = line
+            for pos, char in enumerate(line):
+                self.pos = pos
+                yield char
+        while True:
+            yield Parser.EOF
 
 class Parser:
     ''' Grammar:
@@ -42,21 +57,19 @@ class Parser:
 
     EOF = EndOfLineType()
 
-    def __init__(self, s, filename='<stdin>'):
-        self.inputStr = s
-        self.index = 0
+    def __init__(self, content, filename='<stdin>'):
+        content = InputFile(content, filename)
+        self.content = content
+        self.inputStream = iter(content)
         self.brackets = 0
-        self.lines = s.split('\n')
-        self.lineno = 1
-        self.pos = 1
-        self.filename = filename
+        self.currentChar = self.inputStream.next()
 
     def parse(self):
         self.brackets = 0
         return self.parseContent()
 
     def error(self, msg):
-        raise MarkupSyntaxError(msg, self.lineno, self.pos, self.lines[self.lineno - 1], self.filename)
+        raise MarkupSyntaxError(msg, self.content)
 
     def parseContent(self):
         content = []
@@ -122,14 +135,11 @@ class Parser:
             self.error('expects char "%s" found "%s"' % (char, self.getCurrent()))
 
     def getCurrent(self):
-        return self.inputStr[self.index] if self.index < len(self.inputStr) else self.EOF
+        return self.currentChar
 
     def next(self):
-        self.pos += 1
-        if self.getCurrent() == '\n':
-            self.pos = 1
-            self.lineno += 1
-        self.index += 1
+        if self.currentChar != self.EOF:
+            self.currentChar = self.inputStream.next()
 
     def read(self, whileCond):
         read = []
