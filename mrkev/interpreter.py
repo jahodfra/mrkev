@@ -63,6 +63,19 @@ class ErrorFormatter(object):
     def formatRecurrenceLimit(self, name, limit):
         return u'[recurrence limit for {0}]'.format(name)
 
+class ErrorBlock(object):
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __unicode__(self):
+        ''' print error to output
+        '''
+        return self.msg
+
+    def __nonzero__(self):
+        ''' getBoolean evaluates errors as False
+        '''
+        return False
 
 class Interpreter(object):
     #greater limit than python stack size will lead to exceptions
@@ -77,8 +90,8 @@ class Interpreter(object):
         self.useCount = 0
         self.errorFormatter = errorFormatter or ErrorFormatter()
 
-    def eval(self):
-        return ''.join(unicode(s) for s in self.interpretBlock(self.ast))
+    def evalToString(self):
+        return ''.join(unicode(s) for s in self.eval(self.ast))
 
     def find(self, name):
         for c in self.context:
@@ -88,25 +101,30 @@ class Interpreter(object):
                     return value, c
         return None, None
 
-    def interpretBlock(self, block):
+    def eval(self, block):
         if isinstance(block, basestring):
+            #strings
             res = [block]
 
         elif isinstance(block, list):
-            res = list(chain(*[self.interpretBlock(b) for b in block]))
+            #block content
+            res = list(chain(*[self.eval(b) for b in block]))
 
         elif isinstance(block, UseBlock):
+            #use clause
             blocks, context = self.find(block.name)
             if blocks:
-                res = self.useBlock(block.name, blocks, context)
+                res = self.evalUseBlock(block.name, blocks, context)
             elif block.default is not None:
-                res = self.interpretBlock(block.default)
+                #use default argument
+                res = self.eval(block.default)
             else:
-                res = [self.errorFormatter.formatBlockMissing(block.name)]
+                msg = self.errorFormatter.formatBlockMissing(block.name)
+                res = [ErrorBlock(msg)]
 
         elif isinstance(block, DefineBlock):
             self.setContext(block)
-            res = self.interpretBlock(block.content)
+            res = self.eval(block.content)
             self.delContext()
 
         else:
@@ -116,16 +134,17 @@ class Interpreter(object):
 
         return res
 
-    def useBlock(self, name, block, context):
+    def evalUseBlock(self, name, block, context):
         if context.isSelfContainable(name):
             self.useCount += 1
             if self.useCount > self.RECURRENCE_LIMIT:
-                return [self.errorFormatter.formatRecurrenceLimit(name, self.RECURRENCE_LIMIT)]
-            res = self.interpretBlock(block)
+                msg = self.errorFormatter.formatRecurrenceLimit(name, self.RECURRENCE_LIMIT)
+                return [ErrorBlock(msg)]
+            res = self.eval(block)
             self.useCount -= 1
         else:
             self.visited.add((context, name))
-            res = self.interpretBlock(block)
+            res = self.eval(block)
             self.visited.discard((context, name))
         return res
 
@@ -138,12 +157,13 @@ class Interpreter(object):
     def getValue(self, name, ifMissing=None):
         v, context = self.find(name)
         if v:
-            res = self.useBlock(name, v, context)
+            res = self.evalUseBlock(name, v, context)
         else:
             if ifMissing is not None:
                 res = ifMissing
             else:
-                res = [self.errorFormatter.formatBlockMissing(name)]
+                msg = self.errorFormatter.formatBlockMissing(name)
+                res = [ErrorBlock(msg)]
         return res
 
     def getString(self, name):
@@ -154,7 +174,7 @@ class Interpreter(object):
 
         unknown or empty -> False
         '''
-        res = self.getValue(name, [])
+        res = self.getValue(name)
         return len(res) > 0 and all(res)
 
 class MethodWrapper(object):
@@ -200,7 +220,7 @@ class Template(object):
     def render(self, **kwargs):
         context = self.createContext(kwargs)
         self.interpreter.setContext(context)
-        return self.interpreter.eval()
+        return self.interpreter.evalToString()
 
     def createContext(self, params):
         builtins = {}
@@ -226,8 +246,6 @@ class Template(object):
              'PairTag': self.PairTag,
              'EmptyTag': self.EmptyTag,
          }
-
-        return self.interpreter.eval()
 
     def _getStringBasedMethods(self):
         #find all methods starting with m[A-Z].*

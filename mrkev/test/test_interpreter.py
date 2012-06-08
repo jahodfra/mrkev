@@ -193,6 +193,11 @@ class TestInterpretation(unittest.TestCase):
         res = Template(code).render()
         self.assertEqual(res, 'false')
 
+    def testGetBooleanWithoutTest(self):
+        code = '[If Then=[true] Else=[false]]'
+        res = Template(code).render()
+        self.assertEqual(res, 'false')
+
     def testGetBooleanAndTestTrue(self):
         code = '[If [[A] [B]] Then=[true] Else=[false]]'
         res = Template(code).render(a=True, b=True)
