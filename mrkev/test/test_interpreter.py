@@ -3,6 +3,7 @@
 import re
 import unittest
 from mrkev.interpreter import Template
+from mrkev.parser import Parser
 
 class TestInterpretation(unittest.TestCase):
     def testPlaceVariable(self):
@@ -222,4 +223,10 @@ class TestInterpretation(unittest.TestCase):
         '''
         res = Template(code).render()
         self.assertEqual(res, 'xxx')
+
+    def testPreParsedInput(self):
+        code1 = Parser('[greet :=[Hello world]]').parse()
+        code2 = Parser('[greet]').parse()
+        res = Template(code1 + code2).render()
+        self.assertEqual(res, 'Hello world')
 

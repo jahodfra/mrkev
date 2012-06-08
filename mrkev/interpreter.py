@@ -70,9 +70,8 @@ class Interpreter(object):
     MISSING_MSG = '[%s not found]'
 
 
-    def __init__(self, markup, errorFormatter=None):
-        markup = Parser(markup).parse()
-        self.ast = Translator().translate(markup)
+    def __init__(self, ast, errorFormatter=None):
+        self.ast = ast
         self.context = deque()
         self.visited = set()
         self.useCount = 0
@@ -193,6 +192,9 @@ class Template(object):
         return 'Hello ' + name
     '''
     def __init__(self, code):
+        if isinstance(code, basestring):
+            code = Parser(code).parse()
+        code = Translator().translate(code)
         self.interpreter = Interpreter(code)
 
     def render(self, **kwargs):
