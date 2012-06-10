@@ -9,34 +9,34 @@ endif
 
 syn case match
 
-syn cluster markupBlockContent contains=markupBlock,markupComment,markupString,markupAlias
+syn cluster mrkevBlockContent contains=mrkevBlock,mrkevComment,mrkevString,mrkevParam
 
 "mark illegal characters
-syn match markupError '[\[\]]'
-syn match markupUnexpected contained '\w\+'
+syn match mrkevError '[\[\]]'
+syn match mrkevUnexpected contained '\w\+'
 
-syn match markupString contained '[^\[\]]\+'
-syn region markupComment matchgroup=markupComment start='\[\*' matchgroup=markupComment end='\*\]'
-syn region markupBlock matchgroup=markupBlock start='\[[^\[\] ]\+' matchgroup=markupBlock end='\]' contains=markupArgument,markupUnexpected
+syn match mrkevString contained '[^\[\]]\+'
+syn region mrkevBlock matchgroup=mrkevBlock start='\[[^\[\] ]\+' matchgroup=mrkevBlock end='\]' contains=mrkevArgument,mrkevUnexpected
+syn region mrkevComment matchgroup=mrkevComment start='\[\*' matchgroup=mrkevComment end='\*\]'
 
-syn region markupArgument contained matchgroup=markupArgument start='[a-zA-Z]\+=\[' matchgroup=markupArgument end='\]' contains=@markupBlockContent
-syn region markupArgument contained matchgroup=markupArgument start='\['           matchgroup=markupArgument end='\]' contains=@markupBlockContent
-syn region markupArgument contained matchgroup=markupDefinition start='[:]=\[' matchgroup=markupDefinition end='\]' contains=@markupBlockContent 
+syn region mrkevArgument contained matchgroup=mrkevArgument start='[^=\[\] ]\+=\[' matchgroup=mrkevArgument end='\]' contains=@mrkevBlockContent
+syn region mrkevArgument contained matchgroup=mrkevArgument start='\['           matchgroup=mrkevArgument end='\]' contains=@mrkevBlockContent
+syn region mrkevArgument contained matchgroup=mrkevDefinition start=':=\[' matchgroup=mrkevDefinition end='\]' contains=@mrkevBlockContent 
+syn match mrkevParam /\[\$[a-zA-Z]\+\]/
 
-syn match markupAlias contained /\[@\]/
 
 command! -nargs=+ HiLink hi def link <args>
-HiLink markupError              Error
-HiLink markupUnexpected         Error
+HiLink mrkevError              Error
+HiLink mrkevUnexpected         Error
 
-HiLink markupBlock              Type
+HiLink mrkevBlock              Type
 
-HiLink markupArgument           Identifier
-HiLink markupString             String
-HiLink markupDefinition         Statement
-HiLink markupComment            Comment
+HiLink mrkevArgument           Identifier
+HiLink mrkevString             String
+HiLink mrkevDefinition         Statement
+HiLink mrkevComment            Comment
 
-HiLink markupAlias              Constant
+HiLink mrkevParam              Include
 delcommand HiLink
-let b:current_syntax = "markup"
+let b:current_syntax = "mrkev"
 
