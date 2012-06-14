@@ -120,15 +120,26 @@ class Parser:
                 break
             elif current != '[':
                 pname = self.readWhileRe(self.RE_PARAM)
-                self.check('=')
-                self.next()
+                current = self.getCurrent()
+                if current == '=':
+                    self.next()
+                elif current != self.EOF and pname:
+                    #content shortcut
+                    params['#'] = [MarkupBlock(pname)]
+                    continue
 
-            self.check('[')
-            self.brackets += 1
-            self.next()
-            params[pname] = self.parseContent()
-            self.next()
-            self.brackets -= 1
+            if self.getCurrent() == '[':
+                self.brackets += 1
+                self.next()
+                params[pname] = self.parseContent()
+                self.next()
+                self.brackets -= 1
+            else:
+                #parameter value shortcut
+                useName = self.readWhileRe(self.RE_PARAM)
+                if not useName:
+                    self.error('parameter "{0}" has no value'.format(pname))
+                params[pname] = [MarkupBlock(useName)]
         return MarkupBlock(name, params)
 
     def check(self, char):

@@ -31,9 +31,6 @@ class TestParsing(unittest.TestCase):
     def testAttributeName(self):
         self.assertEqual(parse('[t "$#:%!=[]]'), [use('t', {'"$#:%!': []})])
 
-    def testAttributeNameWithLineEnd(self):
-        self.assertRaises(MarkupSyntaxError, lambda: parse('[t a\n]'))
-
     def testTagNameWithLineEnd(self):
         self.assertEqual(parse('[t\n]'), [use('t')])
 
@@ -43,4 +40,16 @@ class TestParsing(unittest.TestCase):
     def testPreserveLineEnds(self):
         text = '\r\n\na\nb'
         self.assertEqual(parse(text), [text])
+
+    def testContentShortcut(self):
+        self.assertEqual(parse('[a #b]'), [use('a', {'#': [use('#b')]})])
+
+    def testAtributeShortcut(self):
+        self.assertEqual(parse('[a b=c]'), [use('a', {'b': [use('c')]})])
+
+    def testDefinitionShortcut(self):
+        a = parse('[a :=b]')
+        b = parse('[a :=[[b]]]')
+        self.assertEqual(a, b)
+        self.assertEqual(a, [use('a', {':': [use('b')]})])
 
