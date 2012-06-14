@@ -32,7 +32,7 @@ class InputFile:
     def __iter__(self):
         for lineno, line in enumerate(self.text.split('\n')):
             self.lineno = lineno
-            self.line = line
+            self.line = line = line.replace('\r', '') + '\n'
             for pos, char in enumerate(line):
                 self.pos = pos
                 yield char
