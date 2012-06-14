@@ -211,11 +211,11 @@ class Template(object):
     def mHello(self, name):
         return 'Hello ' + name
     '''
-    def __init__(self, code):
+    def __init__(self, code, errorFormatter=None):
         if isinstance(code, basestring):
             code = Parser(code).parse()
         code = Translator().translate(code)
-        self.interpreter = Interpreter(code)
+        self.interpreter = Interpreter(code, errorFormatter=errorFormatter)
 
     def render(self, **kwargs):
         context = self.createContext(kwargs)
