@@ -14,7 +14,7 @@ Examples:
 [getPhones [nokia_se40]]
 
 [formatNotes:=[
-    [List seq=[[getPhones [[@]]] sep=[, ]] [
+    [List seq=[[getPhones [[#]]] sep=[, ]] [
         [Link target=[[item.url]] [[item.caption]]]
     ]]
 ]]
@@ -183,7 +183,7 @@ class MethodWrapper(object):
         self.f = f
 
     def __call__(self, ip):
-        formName = lambda a: a if a != 'content' else '@'
+        formName = lambda a: a if a != 'content' else '#'
         params = dict((a, ip.getString(formName(a))) for a in self.args)
         return self.f(**params)
 
@@ -269,18 +269,18 @@ class Template(object):
             if sep:
                 res = []
                 for i, x in enumerate(seq):
-                    res.append(ip.getValue('@'))
+                    res.append(ip.getValue('#'))
                     if i + 1 != len(seq):
                         res.append(sep)
             else:
-                res = [ip.getValue('@') for i, x in enumerate(seq)]
+                res = [ip.getValue('#') for i, x in enumerate(seq)]
             ip.delContext()
             return list(chain(*res))
         else:
             return ip.getValue('IfEmpty', [])
 
     def Split(self, ip):
-        content = ip.getString('@')
+        content = ip.getString('#')
         sep = ip.getString('Sep')
         if sep:
             res = content.split(sep)
@@ -289,7 +289,7 @@ class Template(object):
         return res
 
     def If(self, ip):
-        if ip.getBoolean('@'):
+        if ip.getBoolean('#'):
             return ip.getValue('Then', [])
         else:
             return ip.getValue('Else', [])
@@ -326,7 +326,7 @@ class Template(object):
     def PairTag(self, ip):
         name = self._getTagName(ip)
         attributes = self._getTagAttributes(ip)
-        content = ip.getValue('@', [])
+        content = ip.getValue('#', [])
         return list(chain(('<', name, joinAttributes(attributes), '>'), content, ('</', name, '>')))
 
     @handleTagExceptions

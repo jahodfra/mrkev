@@ -25,7 +25,7 @@ class TestInterpretation(unittest.TestCase):
 
     def testList2(self):
         code = '''
-        [Link :=[<a href="[Target]">[@]</a>]]
+        [Link :=[<a href="[Target]">[#]</a>]]
         [List Seq=[[$links]] Sep=[,] [
             [Link Target=[[$Item.url]] [[$Item.title]]]
         ]]
@@ -51,7 +51,7 @@ class TestInterpretation(unittest.TestCase):
             ] Header=[
                 <head><title>[Title]</title></head>
             ] Body=[
-                <body>[@]</body>
+                <body>[#]</body>
             ]
         ]
         [Html Title=[New page] [Hello world!]]
@@ -121,7 +121,7 @@ class TestInterpretation(unittest.TestCase):
         #note that same definition c is used multiple times while evaluating itself
         #see selfContainable property
         code = '''
-        [c:=[[@]]]
+        [c:=[[#]]]
         [c name=[a] [
             [c name=[[name]b] [
                 [c name=[[name]c] [

@@ -6,7 +6,7 @@ def parse(s):
 
 class TestParsing(unittest.TestCase):
     def testSimpleUsage(self):
-        parseTree = [use('import', {'@': ['guideline']})]
+        parseTree = [use('import', {'#': ['guideline']})]
         self.assertEqual(parse('[import [guideline]]'), parseTree)
 
     def testListTemplate(self):

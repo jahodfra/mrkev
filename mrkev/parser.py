@@ -113,7 +113,7 @@ class Parser:
         params = {}
         while True:
             self.readSpace()
-            pname = '@'
+            pname = '#'
             current = self.getCurrent()
             if current == ']':
                 self.next()

@@ -105,7 +105,7 @@ class Translator:
             if isinstance(b, MarkupBlock) and b.name == '.':
                 b.name = 'Item'
                 rest.reverse()
-                b.params['@'] = rest
+                b.params['#'] = rest
                 rest = []
                 result.append(b)
             else:
