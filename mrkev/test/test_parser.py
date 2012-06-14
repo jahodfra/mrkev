@@ -39,3 +39,8 @@ class TestParsing(unittest.TestCase):
 
     def testTagNameContainingSpecialCharacters(self):
         self.assertEqual(parse('["$#%!=]'), [use('"$#%!=')])
+
+    def testPreserveLineEnds(self):
+        text = '\r\n\na\nb'
+        self.assertEqual(parse(text), [text])
+

@@ -1,4 +1,5 @@
 import re
+from StringIO import StringIO
 
 class MarkupBlock(object):
     def __init__(self, name, params=None):
@@ -23,16 +24,16 @@ class MarkupSyntaxError(Exception):
 
 class InputFile:
     def __init__(self, text, name):
-        self.text = text
+        self.fin = StringIO(text)
         self.name = name
         self.pos = 0
         self.line = ''
         self.lineno = 0
 
     def __iter__(self):
-        for lineno, line in enumerate(self.text.split('\n')):
+        for lineno, line in enumerate(self.fin):
             self.lineno = lineno
-            self.line = line = line.replace('\r', '') + '\n'
+            self.line = line
             for pos, char in enumerate(line):
                 self.pos = pos
                 yield char
