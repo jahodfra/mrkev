@@ -9,7 +9,7 @@ endif
 
 syn case match
 
-syn cluster mrkevBlockContent contains=mrkevBlock,mrkevComment,mrkevString,mrkevParam
+syn cluster mrkevBlockContent contains=mrkevBlock,mrkevComment,mrkevString,mrkevParam,mrkevDefinition
 
 "mark illegal characters
 syn match mrkevError '[\[\]]'
@@ -18,10 +18,10 @@ syn match mrkevUnexpected contained '\w\+'
 syn match mrkevString contained '[^\[\]]\+'
 syn region mrkevBlock matchgroup=mrkevBlock start='\[[^\[\] ]\+' matchgroup=mrkevBlock end='\]' contains=mrkevArgument,mrkevUnexpected
 syn region mrkevComment matchgroup=mrkevComment start='\[\*' matchgroup=mrkevComment end='\*\]'
+syn region mrkevDefinition matchgroup=mrkevDefinition start='\[[^\[\] ]\+\s\+:=' matchgroup=mrkevDefinition end='\]' contains=mrkevArgument,mrkevUnexpected 
 
 syn region mrkevArgument contained matchgroup=mrkevArgument start='[^=\[\] ]\+=\[' matchgroup=mrkevArgument end='\]' contains=@mrkevBlockContent
 syn region mrkevArgument contained matchgroup=mrkevArgument start='\['           matchgroup=mrkevArgument end='\]' contains=@mrkevBlockContent
-syn region mrkevArgument contained matchgroup=mrkevDefinition start=':=\[' matchgroup=mrkevDefinition end='\]' contains=@mrkevBlockContent 
 syn match mrkevParam /\[\$[a-zA-Z]\+\]/
 
 
@@ -29,11 +29,11 @@ command! -nargs=+ HiLink hi def link <args>
 HiLink mrkevError              Error
 HiLink mrkevUnexpected         Error
 
-HiLink mrkevBlock              Type
+HiLink mrkevBlock              Normal
 
 HiLink mrkevArgument           Identifier
 HiLink mrkevString             String
-HiLink mrkevDefinition         Statement
+HiLink mrkevDefinition         Identifier
 HiLink mrkevComment            Comment
 
 HiLink mrkevParam              Include
