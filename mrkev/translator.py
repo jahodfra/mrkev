@@ -78,7 +78,7 @@ class Translator:
                 if b.params:
                     item = DefineBlock(useBlock)
                     for p, value in b.params.items():
-                        item.addParam(p, self.translate(value))
+                        item.addParam(formParameterName(p), self.translate(value))
                 else:
                     item = useBlock
             seq.append(item)
@@ -119,8 +119,14 @@ class Translator:
         if len(block.params) > 1:
             res = DefineBlock(content)
             for p, c in block.params.items():
-                res.addParam(p, UseBlock(p, self.translate(c)))
+                pname = formParameterName(p)
+                res.addParam(pname, UseBlock(pname, self.translate(c)))
         else:
             res = content
         return res
+
+def formParameterName(param):
+    if param != '#':
+        param = '#' + param
+    return param
 

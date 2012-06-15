@@ -26,7 +26,7 @@ import inspect
 import re
 
 from mrkev.parser import Parser
-from mrkev.translator import UseBlock, DefineBlock, Translator
+from mrkev.translator import UseBlock, DefineBlock, Translator, formParameterName
 
 class CustomContext(object):
     def __init__(self, ip, d):
@@ -183,7 +183,7 @@ class MethodWrapper(object):
         self.f = f
 
     def __call__(self, ip):
-        formName = lambda a: a if a != 'content' else '#'
+        formName = lambda a: formParameterName(a) if a != 'content' else '#'
         params = dict((a, ip.getString(formName(a))) for a in self.args)
         return self.f(**params)
 
@@ -254,8 +254,8 @@ class Template(object):
         return dict((name, MethodWrapper(method)) for name, method in templateMethods)
 
     def List(self, ip):
-        seq = ip.getValue('Seq', [])
-        sep = ip.getString('Sep')
+        seq = ip.getValue('#Seq', [])
+        sep = ip.getString('#Sep')
         if seq:
             ip.setContext(CustomContext(self.interpreter, {
                 #do not use for styling, css 2.0 is powerfull enough
@@ -277,11 +277,11 @@ class Template(object):
             ip.delContext()
             return list(chain(*res))
         else:
-            return ip.getValue('IfEmpty', [])
+            return ip.getValue('#IfEmpty', [])
 
     def Split(self, ip):
         content = ip.getString('#')
-        sep = ip.getString('Sep')
+        sep = ip.getString('#Sep')
         if sep:
             res = content.split(sep)
         else:
@@ -290,9 +290,9 @@ class Template(object):
 
     def If(self, ip):
         if ip.getBoolean('#'):
-            return ip.getValue('Then', [])
+            return ip.getValue('#Then', [])
         else:
-            return ip.getValue('Else', [])
+            return ip.getValue('#Else', [])
 
     def _getTagAttributes(self, ip):
         def parseAttributes(attributeString):
@@ -302,22 +302,22 @@ class Template(object):
             return attributes
 
         def evaluateAttributes(attributes):
-            return [(a, ip.getString(a)) for a in attributes]
+            return [(a, ip.getString(formParameterName(a))) for a in attributes]
 
         def evaluateAttributeList(listName):
             attrString = ip.getString(listName)
             attrList = parseAttributes(attrString)
             return evaluateAttributes(attrList)
 
-        requiredPairs = evaluateAttributeList('Required')
+        requiredPairs = evaluateAttributeList('#Required')
         missingRequired = [a for a, v in requiredPairs if not v]
         if missingRequired:
             raise TagAttributeMissing(missingRequired[0])
-        optionalPairs = evaluateAttributeList('Optional')
+        optionalPairs = evaluateAttributeList('#Optional')
         return list(chain(requiredPairs, optionalPairs))
 
     def _getTagName(self, ip):
-        name = ip.getString('Name').strip()
+        name = ip.getString('#Name').strip()
         if not TAG_NAME_RE.match(name):
             raise TagNameInvalid(name)
         return name

@@ -25,7 +25,7 @@ class TestInterpretation(unittest.TestCase):
 
     def testList2(self):
         code = '''
-        [Link :=[<a href="[Target]">[#]</a>]]
+        [Link :=[<a href="[#Target]">[#]</a>]]
         [List Seq=[[$links]] Sep=[,] [
             [Link Target=[[$Item.url]] [[$Item.title]]]
         ]]
@@ -47,9 +47,9 @@ class TestInterpretation(unittest.TestCase):
     def testDefineTemplate(self):
         code = '''
         [Html :=[
-            <html>[Header][Body]</html>
+            <html>[#Header][#Body]</html>
             ] Header=[
-                <head><title>[Title]</title></head>
+                <head><title>[#Title]</title></head>
             ] Body=[
                 <body>[#]</body>
             ]
@@ -85,14 +85,13 @@ class TestInterpretation(unittest.TestCase):
             ]]
 
         [ul :=[
+            [Item :=[[PairTag Name=[li]]]]
             [PairTag Name=[ul]]
-            ] Item=[[PairTag Name=[li]]
-            ]]
+        ]]
 
         [Link :=[
             [PairTag Name=[a] Required=[href]]
-            ] href=[[Target]
-            ]]
+        ] href=#Target]
 
         [h1 [Lorem ipsum]]
         [p [Lorem ipsum dolor sit amet, consectetuer adipiscing elit.]]
@@ -123,9 +122,9 @@ class TestInterpretation(unittest.TestCase):
         code = '''
         [c:=[[#]]]
         [c name=[a] [
-            [c name=[[name]b] [
-                [c name=[[name]c] [
-                    Hello [name]!
+            [c name=[[#name]b] [
+                [c name=[[#name]c] [
+                    Hello [#name]!
                 ]]
             ]]
         ]]
@@ -222,7 +221,7 @@ class TestInterpretation(unittest.TestCase):
     def testDefaultParameterNeeded(self):
         code = '''
         [print :=[
-            [var]
+            [#var]
         ] var=[xxx]]
         [print]
         '''
