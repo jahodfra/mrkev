@@ -53,3 +53,9 @@ class TestParsing(unittest.TestCase):
         self.assertEqual(a, b)
         self.assertEqual(a, [use('a', {':': [use('b')]})])
 
+    def testDefinitionAfterParameter(self):
+        self.assertRaises(MarkupSyntaxError, lambda: parse('[a b=[] :=[]]'))
+
+    def testParameterDeclaredTwice(self):
+        self.assertRaises(MarkupSyntaxError, lambda: parse('[a b=[] b=[]]'))
+

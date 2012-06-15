@@ -131,15 +131,23 @@ class Parser:
             if self.getCurrent() == '[':
                 self.brackets += 1
                 self.next()
-                params[pname] = self.parseContent()
+                paramValue = self.parseContent()
                 self.next()
                 self.brackets -= 1
             else:
                 #parameter value shortcut
                 useName = self.readWhileRe(self.RE_PARAM)
                 if not useName:
-                    self.error('parameter "{0}" has no value'.format(pname))
-                params[pname] = [MarkupBlock(useName)]
+                    self.error(u'parameter "{0}" has no value'.format(pname))
+                paramValue = [MarkupBlock(useName)]
+
+            if pname == ':' and params:
+                self.error('definition has to precede default parameters')
+
+            if pname in params:
+                self.error(u'parameter "{0}" has been already defined'.format(pname))
+
+            params[pname] = paramValue
         return MarkupBlock(name, params)
 
     def check(self, char):
