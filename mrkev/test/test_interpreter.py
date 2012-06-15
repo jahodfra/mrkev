@@ -234,3 +234,21 @@ class TestInterpretation(unittest.TestCase):
         res = Template(code1 + code2).render()
         self.assertEqual(res, 'Hello world')
 
+class TestAlias(unittest.TestCase):
+    def testParameterAlias(self):
+        code = '''
+        [printA :=#Name]
+        [printB :=[[printA Name=[a[@]b]]]]
+        [printB Name=[xxx]]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, 'axxxb')
+
+    def testParameterAliasInDefinition(self):
+        code = '''
+        [print :=@]
+        [print]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, '[@ not found]')
+

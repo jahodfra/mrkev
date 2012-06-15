@@ -32,12 +32,12 @@ class DefineBlock(object):
         return '[def %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self._params.items()), self.content)
 
 class Translator:
-    def translate(self, blocks):
+    def translate(self, blocks, parameterName=''):
         if isinstance(blocks, list):
             isDefinition = lambda b: isinstance(b, MarkupBlock) and ':' in b.params
             definitions = [b for b in blocks if isDefinition(b)]
             usages = [b for b in blocks if not isDefinition(b)]
-            content = self.translateContent(usages)
+            content = self.translateContent(usages, parameterName)
             if definitions:
                 define = DefineBlock(content)
                 for d in definitions:
@@ -46,7 +46,7 @@ class Translator:
             else:
                 return content
 
-    def translateContent(self, blocks):
+    def translateContent(self, blocks, parameterName=''):
         def stripString(b, isFirst, prevString):
             if isFirst:
                 b = b.lstrip()
@@ -74,11 +74,16 @@ class Translator:
             else:
                 if b.name.startswith('>'):
                     self.translateLink(b)
+                if b.name == '@':
+                    #translate alias
+                    if parameterName:
+                        b.name = parameterName
                 useBlock = UseBlock(b.name)
                 if b.params:
                     item = DefineBlock(useBlock)
                     for p, value in b.params.items():
-                        item.addParam(formParameterName(p), self.translate(value))
+                        pname = formParameterName(p)
+                        item.addParam(pname, self.translate(value, parameterName=pname))
                 else:
                     item = useBlock
             seq.append(item)
@@ -120,7 +125,7 @@ class Translator:
             res = DefineBlock(content)
             for p, c in block.params.items():
                 pname = formParameterName(p)
-                res.addParam(pname, UseBlock(pname, self.translate(c)))
+                res.addParam(pname, UseBlock(pname, self.translate(c, parameterName=pname)))
         else:
             res = content
         return res
