@@ -11,16 +11,21 @@ class BaseContext(object):
     def get(self, name):
         return self._params.get(name)
 
+    def updatedWith(self, context):
+        new = BaseContext()
+        new._params = dict(self._params)
+        new._params.update(context._params)
+        return new
+
 
 class CallBlock(BaseContext):
-    __slots__ = ('name', 'default')
-    def __init__(self, name, default=None):
+    __slots__ = ('name', )
+    def __init__(self, name):
         super(CallBlock, self).__init__()
         self.name = name
-        self.default = default
 
     def __repr__(self):
-        return '[call %s|%s]' % (self.name, self.default)
+        return '[call %s]' % (self.name,)
 
 
 class DefineBlock(BaseContext):
@@ -119,11 +124,11 @@ class Translator:
 
     def translateDefinition(self, block):
         content = self.translate(block.params[':'])
-        if len(block.params) > 1:
+        if block.params:
             res = DefineBlock(content)
             for p, c in block.params.items():
                 pname = formParameterName(p)
-                res.addParam(pname, CallBlock(pname, self.translate(c, parameterName=pname)))
+                res.addParam(pname, self.translate(c, parameterName=pname))
         else:
             res = content
         return res

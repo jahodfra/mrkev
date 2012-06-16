@@ -228,6 +228,16 @@ class TestInterpretation(unittest.TestCase):
         res = Template(code).render()
         self.assertEqual(res, 'xxx')
 
+    def testDefaultParameterOverriden(self):
+        code = '''
+        [print :=[
+            [#var]
+        ] var=[xxx]]
+        [print var=[bbb]]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, 'bbb')
+
     def testPreParsedInput(self):
         code1 = Parser('[greet :=[Hello world]]').parse()
         code2 = Parser('[greet]').parse()

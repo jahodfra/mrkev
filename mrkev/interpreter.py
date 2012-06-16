@@ -38,7 +38,7 @@ class CustomContext(object):
         fname, dictPath = parts[0], parts[1:]
         obj = self.d.get(fname)
         if obj:
-            if callable(obj):
+            if dictPath and callable(obj):
                 obj = obj(self.ip)
             dictPath.reverse()
             while dictPath and obj:
@@ -109,17 +109,12 @@ class Interpreter(object):
 
         elif isinstance(block, CallBlock):
             #use clause
-            self.setContext(block)
             blocks, context = self.find(block.name)
             if blocks:
-                res = self.evalCallBlock(block.name, blocks, context)
-            elif block.default is not None:
-                #use default argument
-                res = self.eval(block.default)
+                res = self.evalCallBlock(block, blocks, context)
             else:
                 msg = self.errorFormatter.formatBlockMissing(block.name)
                 res = [ErrorBlock(msg)]
-            self.delContext()
 
         elif isinstance(block, DefineBlock):
             self.setContext(block)
@@ -133,19 +128,32 @@ class Interpreter(object):
 
         return res
 
-    def evalCallBlock(self, name, block, context):
+    def evalCallBlock(self, block, blocks, context):
+        name = block.name
         isSelfContainable = name[0] not in ('$', '#')
         if isSelfContainable:
             self.useCount += 1
             if self.useCount > self.RECURRENCE_LIMIT:
                 msg = self.errorFormatter.formatRecurrenceLimit(name, self.RECURRENCE_LIMIT)
                 return [ErrorBlock(msg)]
-            res = self.eval(block)
-            self.useCount -= 1
         else:
             self.visited.add((context, name))
-            res = self.eval(block)
+
+        if isinstance(blocks, DefineBlock):
+            #If we are importing definition block, than replace default parameters
+            self.setContext(blocks.updatedWith(block))
+            res = self.eval(blocks.content)
+            self.delContext()
+        else:
+            self.setContext(block)
+            res = self.eval(blocks)
+            self.delContext()
+
+        if isSelfContainable:
+            self.useCount -= 1
+        else:
             self.visited.discard((context, name))
+
         return res
 
     def setContext(self, c):
@@ -155,9 +163,9 @@ class Interpreter(object):
         self.context.popleft()
 
     def getValue(self, name, ifMissing=None):
-        block, context = self.find(name)
-        if block:
-            res = self.evalCallBlock(name, block, context)
+        blocks, context = self.find(name)
+        if blocks:
+            res = self.evalCallBlock(CallBlock(name), blocks, context)
         else:
             if ifMissing is not None:
                 res = ifMissing
