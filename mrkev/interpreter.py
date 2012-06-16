@@ -26,7 +26,7 @@ import inspect
 import re
 
 from mrkev.parser import Parser
-from mrkev.translator import UseBlock, DefineBlock, Translator, formParameterName
+from mrkev.translator import CallBlock, DefineBlock, Translator, formParameterName
 
 class CustomContext(object):
     def __init__(self, ip, d):
@@ -52,9 +52,6 @@ class CustomContext(object):
                 return lambda ip: obj
             return obj
         return None
-
-    def isSelfContainable(self, name):
-        return False
 
 class ErrorFormatter(object):
     def formatBlockMissing(self, name):
@@ -110,17 +107,19 @@ class Interpreter(object):
             #block content
             res = list(chain(*[self.eval(b) for b in block]))
 
-        elif isinstance(block, UseBlock):
+        elif isinstance(block, CallBlock):
             #use clause
+            self.setContext(block)
             blocks, context = self.find(block.name)
             if blocks:
-                res = self.evalUseBlock(block.name, blocks, context)
+                res = self.evalCallBlock(block.name, blocks, context)
             elif block.default is not None:
                 #use default argument
                 res = self.eval(block.default)
             else:
                 msg = self.errorFormatter.formatBlockMissing(block.name)
                 res = [ErrorBlock(msg)]
+            self.delContext()
 
         elif isinstance(block, DefineBlock):
             self.setContext(block)
@@ -134,8 +133,9 @@ class Interpreter(object):
 
         return res
 
-    def evalUseBlock(self, name, block, context):
-        if context.isSelfContainable(name):
+    def evalCallBlock(self, name, block, context):
+        isSelfContainable = name[0] not in ('$', '#')
+        if isSelfContainable:
             self.useCount += 1
             if self.useCount > self.RECURRENCE_LIMIT:
                 msg = self.errorFormatter.formatRecurrenceLimit(name, self.RECURRENCE_LIMIT)
@@ -155,9 +155,9 @@ class Interpreter(object):
         self.context.popleft()
 
     def getValue(self, name, ifMissing=None):
-        v, context = self.find(name)
-        if v:
-            res = self.evalUseBlock(name, v, context)
+        block, context = self.find(name)
+        if block:
+            res = self.evalCallBlock(name, block, context)
         else:
             if ifMissing is not None:
                 res = ifMissing

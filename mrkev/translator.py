@@ -1,35 +1,37 @@
 from mrkev.parser import MarkupBlock
 
-class UseBlock(object):
+class BaseContext(object):
+    __slots__ = ('_params',)
+    def __init__(self):
+        self._params = {}
+
+    def addParam(self, name, value):
+        self._params[name] = value
+
+    def get(self, name):
+        return self._params.get(name)
+
+
+class CallBlock(BaseContext):
     __slots__ = ('name', 'default')
     def __init__(self, name, default=None):
-        super(UseBlock, self).__init__()
+        super(CallBlock, self).__init__()
         self.name = name
         self.default = default
 
     def __repr__(self):
-        return '[%s|%s]' % (self.name, self.default)
+        return '[call %s|%s]' % (self.name, self.default)
 
-class DefineBlock(object):
+
+class DefineBlock(BaseContext):
     __slots__ = ('_params', 'content')
     def __init__(self, content):
         super(DefineBlock, self).__init__()
         self.content = content
-        self._params = {}
-
-    def addParam(self, name, value, selfContainable=False):
-        self._params[name] = value, selfContainable
-
-    def get(self, name):
-        v = self._params.get(name)
-        return v[0] if v else None
-
-    def isSelfContainable(self, name):
-        v = self._params.get(name)
-        return v[1] if v else None
 
     def __repr__(self):
         return '[def %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self._params.items()), self.content)
+
 
 class Translator:
     def translate(self, blocks, parameterName=''):
@@ -41,7 +43,7 @@ class Translator:
             if definitions:
                 define = DefineBlock(content)
                 for d in definitions:
-                    define.addParam(d.name, self.translateDefinition(d), True)
+                    define.addParam(d.name, self.translateDefinition(d))
                 return define
             else:
                 return content
@@ -78,14 +80,10 @@ class Translator:
                     #translate alias
                     if parameterName:
                         b.name = parameterName
-                useBlock = UseBlock(b.name)
-                if b.params:
-                    item = DefineBlock(useBlock)
-                    for p, value in b.params.items():
-                        pname = formParameterName(p)
-                        item.addParam(pname, self.translate(value, parameterName=pname))
-                else:
-                    item = useBlock
+                item = CallBlock(b.name)
+                for p, value in b.params.items():
+                    pname = formParameterName(p)
+                    item.addParam(pname, self.translate(value, parameterName=pname))
             seq.append(item)
         if seq and isinstance(seq[-1], basestring):
             s = seq[-1].rstrip()
@@ -125,7 +123,7 @@ class Translator:
             res = DefineBlock(content)
             for p, c in block.params.items():
                 pname = formParameterName(p)
-                res.addParam(pname, UseBlock(pname, self.translate(c, parameterName=pname)))
+                res.addParam(pname, CallBlock(pname, self.translate(c, parameterName=pname)))
         else:
             res = content
         return res
