@@ -1,21 +1,16 @@
 from mrkev.parser import MarkupBlock
 
 class BaseContext(object):
-    __slots__ = ('_params',)
+    __slots__ = ('params', 'useParams')
     def __init__(self):
-        self._params = {}
+        self.params = {}
+        self.useParams = {}
 
     def addParam(self, name, value):
-        self._params[name] = value
+        self.params[name] = value
 
     def get(self, name):
-        return self._params.get(name)
-
-    def updatedWith(self, context):
-        new = BaseContext()
-        new._params = dict(self._params)
-        new._params.update(context._params)
-        return new
+        return self.useParams.get(name) or self.params.get(name)
 
 
 class CallBlock(BaseContext):
@@ -28,32 +23,48 @@ class CallBlock(BaseContext):
         return '[call %s]' % (self.name,)
 
 
+class CallParameter(object):
+    __slots__ = ('name', 'lexicalScope')
+    def __init__(self, name, lexicalScope):
+        super(CallParameter, self).__init__()
+        self.name = name
+        self.lexicalScope = lexicalScope
+
+    def __repr__(self):
+        return '[param %s]' % (self.name,)
+
+
 class DefineBlock(BaseContext):
-    __slots__ = ('_params', 'content')
-    def __init__(self, content):
+    __slots__ = ('params', 'content')
+    def __init__(self):
         super(DefineBlock, self).__init__()
-        self.content = content
 
     def __repr__(self):
         return '[def %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self._params.items()), self.content)
 
 
 class Translator:
-    def translate(self, blocks, parameterName=''):
+    def translate(self, blocks):
+        return self.translateContent(blocks, lexicalScope=None, parameterName='')
+
+    def translateContent(self, blocks, lexicalScope, parameterName):
         if isinstance(blocks, list):
             isDefinition = lambda b: isinstance(b, MarkupBlock) and ':' in b.params
             definitions = [b for b in blocks if isDefinition(b)]
             usages = [b for b in blocks if not isDefinition(b)]
-            content = self.translateContent(usages, parameterName)
+            content = self.translatePlainContent(usages, lexicalScope=lexicalScope, parameterName=parameterName)
             if definitions:
-                define = DefineBlock(content)
+                define = DefineBlock()
+                define.content = content
                 for d in definitions:
-                    define.addParam(d.name, self.translateDefinition(d))
+                    define.addParam(d.name, self.translateDefinition(d, lexicalScope=lexicalScope))
                 return define
             else:
                 return content
+        else:
+            raise AttributeError('blocks = %s' % blocks)
 
-    def translateContent(self, blocks, parameterName=''):
+    def translatePlainContent(self, blocks, lexicalScope, parameterName):
         def stripString(b, isFirst, prevString):
             if isFirst:
                 b = b.lstrip()
@@ -85,10 +96,13 @@ class Translator:
                     #translate alias
                     if parameterName:
                         b.name = parameterName
-                item = CallBlock(b.name)
-                for p, value in b.params.items():
-                    pname = formParameterName(p)
-                    item.addParam(pname, self.translate(value, parameterName=pname))
+                if b.name[0] == '#':
+                    item = CallParameter(b.name, lexicalScope=lexicalScope)
+                else:
+                    item = CallBlock(b.name)
+                    for p, value in b.params.items():
+                        pname = formParameterName(p)
+                        item.addParam(pname, self.translateContent(value, lexicalScope=lexicalScope, parameterName=pname))
             seq.append(item)
         if seq and isinstance(seq[-1], basestring):
             s = seq[-1].rstrip()
@@ -122,15 +136,13 @@ class Translator:
         rest.reverse()
         return rest + result
 
-    def translateDefinition(self, block):
-        content = self.translate(block.params[':'])
-        if block.params:
-            res = DefineBlock(content)
-            for p, c in block.params.items():
+    def translateDefinition(self, block, lexicalScope):
+        res = DefineBlock()
+        res.content = self.translateContent(block.params[':'], lexicalScope=res, parameterName='')
+        for p, c in block.params.items():
+            if p != ':':
                 pname = formParameterName(p)
-                res.addParam(pname, self.translate(c, parameterName=pname))
-        else:
-            res = content
+                res.addParam(pname, self.translateContent(c, lexicalScope=res, parameterName=pname))
         return res
 
 def formParameterName(param):

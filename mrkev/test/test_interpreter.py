@@ -18,7 +18,7 @@ class TestInterpretation(unittest.TestCase):
     def testList(self):
         code = '''
         <ul>[List Seq=[[$Literature]] [
-            <li[*just an example better use css selector*][If [[$Last]] Then=[[Sp]class="last"]]>[$Order]. [$Item]</li>
+            <li[*just an example it is better to use css selector*][If [[$Last]] Then=[[Sp]class="last"]]>[$Order]. [$Item]</li>
         ]]</ul>
         '''
         self.assertEqual(Template(code).render(Literature=[u'Shakespear', u'Čapek']), u'<ul><li>1. Shakespear</li><li class="last">2. Čapek</li></ul>')
@@ -77,20 +77,20 @@ class TestInterpretation(unittest.TestCase):
 
         code = '''
         [p :=[
-            [PairTag Name=[p]]
+            [PairTag Name=[p] #]
             ]]
 
         [h1 :=[
-            [PairTag Name=[h1]]
+            [PairTag Name=[h1] #]
             ]]
 
         [ul :=[
-            [Item :=[[PairTag Name=[li]]]]
-            [PairTag Name=[ul]]
+            [Item :=[[PairTag Name=[li] #]]]
+            [PairTag Name=[ul] #]
         ]]
 
         [Link :=[
-            [PairTag Name=[a] Required=[href]]
+            [PairTag Name=[a] Required=[href] href=@ #]
         ] href=#Target]
 
         [h1 [Lorem ipsum]]
@@ -117,23 +117,12 @@ class TestInterpretation(unittest.TestCase):
         self.assertEqual(result, expectedResult)
 
     def testRecursion2(self):
-        #note that same definition c is used multiple times while evaluating itself
-        #see selfContainable property
-        code = '''
-        [c:=[[#]]]
-        [c name=[a] [
-            [c name=[[#name]b] [
-                [c name=[[#name]c] [
-                    Hello [#name]!
-                ]]
-            ]]
-        ]]
-        '''
-        self.assertEqual(Template(code).render(), 'Hello abc!')
+        code = '[c:=# #][c]'
+        self.assertEqual(Template(code).render(), '[# not found]')
 
     def testRecursion3(self):
         #selfContainable property enables infinite recursion, this test ensures, that program has some limit on it
-        code = '[c:=[[c]]][c]'
+        code = '[c:=c][c]'
         self.assertEqual(Template(code).render(), '[recurrence limit for c]')
 
     def testContent(self):
@@ -149,20 +138,18 @@ class TestInterpretation(unittest.TestCase):
 
     def testPairTag(self):
         code = '''
-            [PairTag Name=[a] Required=[href] Optional=[class,id,title] [Link]
-                href=[http://www.example.com]
-                title=[Example Title]
-            ]
+        [PairTag Name=[a] Required=[href] Optional=[class,id,title] [Link]
+        href=[http://www.example.com] title=[Example Title]]
         '''
         res = Template(code).render()
         self.assertEqual(res, '<a href="http://www.example.com" title="Example Title">Link</a>')
 
     def testEmptyTag(self):
         code = '''
-            [EmptyTag Name=[a] Required=[href] Optional=[class,id,title] [Link]
-                href=[http://www.example.com]
-                title=[Example Title]
-            ]
+        [EmptyTag Name=[a] Required=[href] Optional=[class,id,title] [Link]
+            href=[http://www.example.com]
+            title=[Example Title]
+        ]
         '''
         res = Template(code).render()
         self.assertEqual(res, '<a href="http://www.example.com" title="Example Title"/>')
@@ -209,11 +196,8 @@ class TestInterpretation(unittest.TestCase):
 
     def testDefaultParameterNotNeeded(self):
         code = '''
-        [var :=[aaa]]
-        [print :=[
-            [var]
-        ] var=[xxx]]
-        [print]
+        [print :=#var var=[xxx]]
+        [print var=[aaa]]
         '''
         res = Template(code).render()
         self.assertEqual(res, 'aaa')
