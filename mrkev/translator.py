@@ -1,16 +1,15 @@
 from mrkev.parser import MarkupBlock
 
 class BaseContext(object):
-    __slots__ = ('params', 'useParams')
+    __slots__ = ('params',)
     def __init__(self):
         self.params = {}
-        self.useParams = {}
 
     def addParam(self, name, value):
         self.params[name] = value
 
     def get(self, name):
-        return self.useParams.get(name) or self.params.get(name)
+        return self.params.get(name)
 
 
 class CallBlock(BaseContext):
@@ -24,47 +23,73 @@ class CallBlock(BaseContext):
 
 
 class CallParameter(object):
-    __slots__ = ('name', 'lexicalScope')
-    def __init__(self, name, lexicalScope):
+    __slots__ = ('name', 'lexicalScope', 'inDefaultParameter')
+    def __init__(self, name, lexicalScope, inDefaultParameter):
         super(CallParameter, self).__init__()
         self.name = name
         self.lexicalScope = lexicalScope
+        self.inDefaultParameter = inDefaultParameter
 
     def __repr__(self):
         return '[param %s]' % (self.name,)
 
 
-class DefineBlock(BaseContext):
-    __slots__ = ('params', 'content')
-    def __init__(self):
-        super(DefineBlock, self).__init__()
+class BlockDefinition(BaseContext):
+    __slots__ = ('name', 'params', 'content')
+    def __init__(self, name):
+        super(BlockDefinition, self).__init__()
+        self.name = name
+        self.content = []
 
     def __repr__(self):
-        return '[def %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self._params.items()), self.content)
+        return '[def %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self.params.items()), self.content)
+
+
+class BlockScope(BaseContext):
+    __slots__ = ('params', 'content')
+    def __init__(self):
+        super(BlockScope, self).__init__()
+
+    def __repr__(self):
+        return '[scope %s %s]' % (', '.join('%s=%s' % (p, v) for p, v in self.params.items()), self.content)
 
 
 class Translator:
-    def translate(self, blocks):
-        return self.translateContent(blocks, lexicalScope=None, parameterName='')
+    def __init__(self):
+        self.lexicalScope = []
+        self.parameterName = []
+        self.inDefaultParameter = []
 
-    def translateContent(self, blocks, lexicalScope, parameterName):
+    def translate(self, blocks):
+        self.lexicalScope.append(None)
+        self.parameterName.append('')
+        self.inDefaultParameter.append(False)
+        res = self.translateContent(blocks)
+        self.lexicalScope.pop()
+        self.parameterName.pop()
+        self.inDefaultParameter.pop()
+        return res
+
+    def translateContent(self, blocks):
         if isinstance(blocks, list):
             isDefinition = lambda b: isinstance(b, MarkupBlock) and ':' in b.params
             definitions = [b for b in blocks if isDefinition(b)]
             usages = [b for b in blocks if not isDefinition(b)]
-            content = self.translatePlainContent(usages, lexicalScope=lexicalScope, parameterName=parameterName)
+            content = self.translatePlainContent(usages)
             if definitions:
-                define = DefineBlock()
+                define = BlockScope()
                 define.content = content
+                self.parameterName.append('')
                 for d in definitions:
-                    define.addParam(d.name, self.translateDefinition(d, lexicalScope=lexicalScope))
+                    define.addParam(d.name, self.translateDefinition(d))
+                self.parameterName.pop()
                 return define
             else:
                 return content
         else:
             raise AttributeError('blocks = %s' % blocks)
 
-    def translatePlainContent(self, blocks, lexicalScope, parameterName):
+    def translatePlainContent(self, blocks):
         def stripString(b, isFirst, prevString):
             if isFirst:
                 b = b.lstrip()
@@ -94,15 +119,17 @@ class Translator:
                     self.translateLink(b)
                 if b.name == '@':
                     #translate alias
-                    if parameterName:
-                        b.name = parameterName
+                    if self.parameterName[-1]:
+                        b.name = self.parameterName[-1]
                 if b.name[0] == '#':
-                    item = CallParameter(b.name, lexicalScope=lexicalScope)
+                    item = CallParameter(b.name, lexicalScope=self.lexicalScope[-1], inDefaultParameter=self.inDefaultParameter[-1])
                 else:
                     item = CallBlock(b.name)
                     for p, value in b.params.items():
                         pname = formParameterName(p)
-                        item.addParam(pname, self.translateContent(value, lexicalScope=lexicalScope, parameterName=pname))
+                        self.parameterName.append(pname)
+                        item.addParam(pname, self.translateContent(value))
+                        self.parameterName.pop()
             seq.append(item)
         if seq and isinstance(seq[-1], basestring):
             s = seq[-1].rstrip()
@@ -136,13 +163,21 @@ class Translator:
         rest.reverse()
         return rest + result
 
-    def translateDefinition(self, block, lexicalScope):
-        res = DefineBlock()
-        res.content = self.translateContent(block.params[':'], lexicalScope=res, parameterName='')
+    def translateDefinition(self, block):
+        res = BlockDefinition(block.name)
+        self.lexicalScope.append(res)
+        self.parameterName.append('')
+        res.content = self.translateContent(block.params[':'])
+        self.parameterName.pop()
         for p, c in block.params.items():
             if p != ':':
                 pname = formParameterName(p)
-                res.addParam(pname, self.translateContent(c, lexicalScope=res, parameterName=pname))
+                self.parameterName.append(pname)
+                self.inDefaultParameter.append(True)
+                res.addParam(pname, self.translateContent(c))
+                self.parameterName.pop()
+                self.inDefaultParameter.pop()
+        self.lexicalScope.pop()
         return res
 
 def formParameterName(param):

@@ -26,7 +26,7 @@ import inspect
 import re
 
 from mrkev.parser import Parser
-from mrkev.translator import CallBlock, CallParameter, DefineBlock, Translator, formParameterName
+from mrkev.translator import CallBlock, CallParameter, BlockDefinition, BlockScope, Translator, formParameterName
 
 class CustomContext(object):
     def __init__(self, ip, d):
@@ -77,31 +77,35 @@ class ErrorBlock(object):
 class Interpreter(object):
     #greater limit than python stack size will lead to exceptions
     RECURRENCE_LIMIT = 30
-    MISSING_MSG = '[%s not found]'
-
 
     def __init__(self, ast, errorFormatter=None):
         self.ast = ast
-        self.context = deque()
         self.useCount = 0
         self.errorFormatter = errorFormatter or ErrorFormatter()
         self.currentLexicalScope = None
+        self.blockScopes = deque()
+        self.callScopes = deque()
 
     def evalToString(self):
         return ''.join(unicode(s) for s in self.eval(self.ast))
 
-    def find(self, block):
-        for c in self.context:
+    def findBlock(self, block):
+        for c in self.blockScopes:
             value = c.get(block.name)
             if value is not None:
                 return value
         return None
 
     def findParameter(self, block):
-        if block.lexicalScope:
-            return block.lexicalScope.get(block.name)
-        else:
-            return None
+        for callBlock, blockDef in self.callScopes:
+            if blockDef is block.lexicalScope:
+                #get last calling of the same block
+                if block.inDefaultParameter:
+                    #prevents call cycles in default parameters
+                    return callBlock.get(block.name)
+                else:
+                    return  callBlock.get(block.name) or block.lexicalScope.get(block.name)
+        return None
 
     def eval(self, block):
         if isinstance(block, basestring):
@@ -120,16 +124,12 @@ class Interpreter(object):
             if not blocks:
                 msg = self.errorFormatter.formatBlockMissing(block.name)
                 return [ErrorBlock(msg)]
-            self.useCount += 1
-            if self.useCount > self.RECURRENCE_LIMIT:
-                return self.createRecurrenceLimit(block.name)
             res = self.eval(blocks)
-            self.useCount -= 1
 
-        elif isinstance(block, DefineBlock):
-            self.setContext(block)
+        elif isinstance(block, BlockScope):
+            self.addBlockScope(block)
             res = self.eval(block.content)
-            self.delContext()
+            self.removeBlockScope()
 
         else:
             res = block(self)
@@ -140,8 +140,8 @@ class Interpreter(object):
 
     def evalCallBlock(self, block):
         name = block.name
-        blocks = self.find(block)
-        if not blocks:
+        blockDef = self.findBlock(block)
+        if not blockDef:
             msg = self.errorFormatter.formatBlockMissing(name)
             return [ErrorBlock(msg)]
 
@@ -149,15 +149,14 @@ class Interpreter(object):
         if self.useCount > self.RECURRENCE_LIMIT:
             return self.createRecurrenceLimit(name)
 
-        if isinstance(blocks, DefineBlock):
-            defineBlock = blocks
-            defineBlock.useParams = block.params
-            res = self.eval(defineBlock)
-            defineBlock.useParams = {}
+        if isinstance(blockDef, BlockDefinition):
+            self.addCallScope(block, blockDef)
+            res = self.eval(blockDef.content)
+            self.removeCallScope()
         else:
-            prevScope, self.currentLexicalScope = self.currentLexicalScope, block
-            res = self.eval(blocks)
-            self.currentLexicalScope = prevScope
+            self.addCallScope(block, None)
+            res = self.eval(blockDef)
+            self.removeCallScope()
 
         self.useCount -= 1
         return res
@@ -166,14 +165,20 @@ class Interpreter(object):
         msg = self.errorFormatter.formatRecurrenceLimit(name, self.RECURRENCE_LIMIT)
         return [ErrorBlock(msg)]
 
-    def setContext(self, c):
-        self.context.appendleft(c)
+    def addBlockScope(self, blockScope):
+        self.blockScopes.appendleft(blockScope)
 
-    def delContext(self):
-        self.context.popleft()
+    def removeBlockScope(self):
+        self.blockScopes.popleft()
+
+    def addCallScope(self, blockCall, blockDefinition):
+        self.callScopes.appendleft((blockCall, blockDefinition))
+
+    def removeCallScope(self):
+        self.callScopes.popleft()
 
     def getValue(self, name, ifMissing=None):
-        res = self.eval(CallParameter(name, lexicalScope=self.currentLexicalScope))
+        res = self.eval(CallParameter(name, lexicalScope=None, inDefaultParameter=True))
         if ifMissing is not None and res and isinstance(res[0], ErrorBlock):
             res = ifMissing
         return res
@@ -231,7 +236,7 @@ class Template(object):
 
     def render(self, **kwargs):
         context = self.createContext(kwargs)
-        self.interpreter.setContext(context)
+        self.interpreter.addBlockScope(context)
         return self.interpreter.evalToString()
 
     def createContext(self, params):
@@ -269,7 +274,7 @@ class Template(object):
         seq = ip.getValue('#Seq', [])
         sep = ip.getString('#Sep')
         if seq:
-            ip.setContext(CustomContext(self.interpreter, {
+            ip.addBlockScope(CustomContext(self.interpreter, {
                 #do not use for styling, css 2.0 is powerfull enough
                 '$Even':  lambda _: i % 2 == 1,
                 '$First': lambda _: i == 0,
@@ -286,7 +291,7 @@ class Template(object):
                         res.append(sep)
             else:
                 res = [ip.getValue('#') for i, x in enumerate(seq)]
-            ip.delContext()
+            ip.removeBlockScope()
             return list(chain(*res))
         else:
             return ip.getValue('#IfEmpty', [])
