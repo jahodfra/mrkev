@@ -246,3 +246,47 @@ class TestAlias(unittest.TestCase):
         res = Template(code).render()
         self.assertEqual(res, '[@ not found]')
 
+class TestParameterScope(unittest.TestCase):
+    def testInCallScope(self):
+        code = '''
+        [A :=#]
+        [B :=#Name]
+        [A Name=[a] [
+            [B]
+        ]]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, '[#Name not found]')
+
+    def testInCall(self):
+        code = '''
+        [A :=#]
+        [B :=#Name]
+        [A [
+            [B Name=[a]]
+        ]]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, 'a')
+
+    def testInDefault(self):
+        code = '''
+        [A :=#a a=#b]
+        [A a=[xxx]] [A b=[yyy]]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, 'xxx yyy')
+
+    def testLexicalScope(self):
+        code = '''
+        [A :=#]
+        [B :=[
+            [A [
+                [A #Name]
+            ]]
+        ]]
+        [B Name=[a]]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, 'a')
+
