@@ -1,4 +1,3 @@
-import re
 from StringIO import StringIO
 
 class MarkupBlock(object):
@@ -49,9 +48,6 @@ class Parser:
         PARAMS = IDENT, '=[', CONTENT, ']'
             | '=[', CONTENT, ']'
     '''
-    RE_IDENT = re.compile(r'[^\[\] \:\n\r\t]')
-    RE_PARAM = re.compile(r'[^\[\] \=\n\r\t]')
-
     class EndOfLineType:
         def __str__(self):
             return 'end of line'
@@ -107,7 +103,7 @@ class Parser:
 
 
     def parseBlock(self):
-        name = self.readWhileRe(self.RE_IDENT)
+        name = self.parseIdent()
         if not name:
             self.error('no name')
         params = {}
@@ -119,7 +115,7 @@ class Parser:
                 self.next()
                 break
             elif current != '[':
-                pname = self.readWhileRe(self.RE_PARAM)
+                pname = self.parseParam()
                 current = self.getCurrent()
                 if current == '=':
                     self.next()
@@ -136,7 +132,7 @@ class Parser:
                 self.brackets -= 1
             else:
                 #parameter value shortcut
-                useName = self.readWhileRe(self.RE_PARAM)
+                useName = self.parseParam()
                 if not useName:
                     self.error(u'parameter "{0}" has no value'.format(pname))
                 paramValue = [MarkupBlock(useName)]
@@ -149,6 +145,12 @@ class Parser:
 
             params[pname] = paramValue
         return MarkupBlock(name, params)
+
+    def parseIdent(self):
+        return self.readUntil('[] :\n\r\t')
+
+    def parseParam(self):
+        return self.readUntil('[] =\n\r\t')
 
     def check(self, char):
         if self.getCurrent() != char:
@@ -173,9 +175,6 @@ class Parser:
 
     def readUntil(self, chars):
         return self.read(lambda c: c not in chars)
-
-    def readWhileRe(self, regex):
-        return self.read(regex.match)
 
     def readSpace(self):
         return self.read(lambda c: c.isspace())

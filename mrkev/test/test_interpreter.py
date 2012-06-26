@@ -290,3 +290,26 @@ class TestParameterScope(unittest.TestCase):
         res = Template(code).render()
         self.assertEqual(res, 'a')
 
+
+class TestBlockDefinition(unittest.TestCase):
+    def testRedefineParameters(self):
+        code = '''
+        [Bird :=[[#A] and [#B]] A=[has feathers] B=[flies]]
+        [Penguin :=[[Bird B=@]] B=[swims]]
+        [Penguin]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, 'has feathers and swims')
+
+    def testRedefineParametersOfSameBlock(self):
+        code = '''
+        [Bird :=[bird [#A]] A=[flies]]
+        [c :=#]
+        [c [
+            [Bird :=[[:Bird A=@]] A=[flies or swims]]
+            [Bird], [:Bird]
+        ]]
+        '''
+        res = Template(code).render()
+        self.assertEqual(res, 'bird flies or swims, bird files')
+
