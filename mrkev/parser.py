@@ -147,7 +147,7 @@ class Parser:
         return MarkupBlock(name, params)
 
     def parseIdent(self):
-        return self.readUntil('[] :\n\r\t')
+        return self.readUntil('[] \n\r\t')
 
     def parseParam(self):
         return self.readUntil('[] =\n\r\t')

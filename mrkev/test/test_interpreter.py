@@ -64,65 +64,18 @@ class TestInterpretation(unittest.TestCase):
 
     def testRecursion(self):
         code = '''
-        [Greeting:=[Hello [name]!]]
+        [Greeting :=[Hello [name]!]]
         [Greeting name=[[name]]]
         '''
         self.assertEqual(Template(code).render(), 'Hello [name not found]!')
 
-    def testWiki(self):
-        RE_WHITESPACE = re.compile(r'[\r\n\t ]+')
-        def replaceSpace(s):
-            #replace longer whitespace with one space
-            return RE_WHITESPACE.sub(' ', s)
-
-        code = '''
-        [p :=[
-            [PairTag Name=[p] #]
-            ]]
-
-        [h1 :=[
-            [PairTag Name=[h1] #]
-            ]]
-
-        [ul :=[
-            [Item :=[[PairTag Name=[li] #]]]
-            [PairTag Name=[ul] #]
-        ]]
-
-        [Link :=[
-            [PairTag Name=[a] Required=[href] href=@ #]
-        ] href=#Target]
-
-        [h1 [Lorem ipsum]]
-        [p [Lorem ipsum dolor sit amet, consectetuer adipiscing elit.]]
-        [p [Ut wisi enim ad minim veniam, quis nostrud exerci tation]]
-        [ul [
-            [.] dolor sit amen
-            [.] wisi enim ad
-            [.] [>~/contacts [contacts]]
-        ]]
-        '''
-        expectedResult = ''.join((
-        '<h1>Lorem ipsum</h1> ',
-        '<p>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</p> ',
-        '<p>Ut wisi enim ad minim veniam, quis nostrud exerci tation</p> ',
-        '<ul>',
-            '<li>dolor sit amen</li>'
-            '<li>wisi enim ad</li>',
-            '<li><a href="~/contacts">contacts</a></li>',
-        '</ul>',
-        ))
-        result = Template(code).render()
-        result = replaceSpace(result)
-        self.assertEqual(result, expectedResult)
-
     def testRecursion2(self):
-        code = '[c:=# #][c]'
+        code = '[c :=# #][c]'
         self.assertEqual(Template(code).render(), '[# not found]')
 
     def testRecursion3(self):
         #selfContainable property enables infinite recursion, this test ensures, that program has some limit on it
-        code = '[c:=c][c]'
+        code = '[c :=c][c]'
         self.assertEqual(Template(code).render(), '[recurrence limit for c]')
 
     def testContent(self):
@@ -135,39 +88,6 @@ class TestInterpretation(unittest.TestCase):
 
     def testEscaping(self):
         self.assertEqual(Template('[(]1[)]').render(), '[1]')
-
-    def testPairTag(self):
-        code = '''
-        [PairTag Name=[a] Required=[href] Optional=[class,id,title] [Link]
-        href=[http://www.example.com] title=[Example Title]]
-        '''
-        res = Template(code).render()
-        self.assertEqual(res, '<a href="http://www.example.com" title="Example Title">Link</a>')
-
-    def testEmptyTag(self):
-        code = '''
-        [EmptyTag Name=[a] Required=[href] Optional=[class,id,title] [Link]
-            href=[http://www.example.com]
-            title=[Example Title]
-        ]
-        '''
-        res = Template(code).render()
-        self.assertEqual(res, '<a href="http://www.example.com" title="Example Title"/>')
-
-    def testEmptyTagName(self):
-        code = '[EmptyTag Name=[]]'
-        res = Template(code).render()
-        self.assertEqual(res, '[missing tag name]')
-
-    def testInvalidTagName(self):
-        code = '[EmptyTag Name=[a:b:c]]'
-        res = Template(code).render()
-        self.assertEqual(res, '[tag name "a:b:c" invalid]')
-
-    def testTagNameWithNamespace(self):
-        code = '[EmptyTag Name=[Namespace:Tag1]]'
-        res = Template(code).render()
-        self.assertEqual(res, '<Namespace:Tag1/>')
 
     def testGetBooleanMissingTest(self):
         code = '[If [[Missing]] Then=[true] Else=[false]]'
@@ -227,6 +147,76 @@ class TestInterpretation(unittest.TestCase):
         code2 = Parser('[greet]').parse()
         res = Template(code1 + code2).render()
         self.assertEqual(res, 'Hello world')
+
+
+class TestTagGenerator(unittest.TestCase):
+    def testWiki(self):
+        RE_WHITESPACE = re.compile(r'[\r\n\t ]+')
+        def replaceSpace(s):
+            #replace longer whitespace with one space
+            return RE_WHITESPACE.sub(' ', s)
+
+        code = '''
+        [p :=[
+            [html.p #]
+            ]]
+
+        [h1 :=[
+            [html.h1 #]
+            ]]
+
+        [ul :=[
+            [Item :=[[html.li #]]]
+            [html.ul #]
+        ]]
+
+        [Link :=[
+            [html.a href=@ #]
+        ] href=#Target]
+
+        [h1 [Lorem ipsum]]
+        [p [Lorem ipsum dolor sit amet, consectetuer adipiscing elit.]]
+        [p [Ut wisi enim ad minim veniam, quis nostrud exerci tation]]
+        [ul [
+            [.] dolor sit amen
+            [.] wisi enim ad
+            [.] [>~/contacts [contacts]]
+        ]]
+        '''
+        expectedResult = ''.join((
+        '<h1>Lorem ipsum</h1> ',
+        '<p>Lorem ipsum dolor sit amet, consectetuer adipiscing elit.</p> ',
+        '<p>Ut wisi enim ad minim veniam, quis nostrud exerci tation</p> ',
+        '<ul>',
+            '<li>dolor sit amen</li>'
+            '<li>wisi enim ad</li>',
+            '<li><a href="~/contacts">contacts</a></li>',
+        '</ul>',
+        ))
+        result = Template(code).render()
+        result = replaceSpace(result)
+        self.assertEqual(result, expectedResult)
+
+    def testPairTag(self):
+        code = '[html.a href=[http://www.example.com] title=[Example Title] [Link]]'
+        res = Template(code).render()
+        self.assertEqual(res, '<a href="http://www.example.com" title="Example Title">Link</a>')
+
+    def testEmptyTag(self):
+        code = '[html.a href=[http://www.example.com] title=[Example Title]]'
+        res = Template(code).render()
+        self.assertEqual(res, '<a href="http://www.example.com" title="Example Title"/>')
+
+    def testInvalidTagName(self):
+        code = '[html.a:b:c]'
+        res = Template(code).render()
+        self.assertEqual(res, '[tag name "a:b:c" invalid]')
+
+    def testTagNameWithNamespace(self):
+        code = '[html.Namespace:Tag1]'
+        res = Template(code).render()
+        self.assertEqual(res, '<Namespace:Tag1/>')
+
 
 class TestAlias(unittest.TestCase):
     def testParameterAlias(self):

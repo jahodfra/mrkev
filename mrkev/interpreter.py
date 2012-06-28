@@ -45,7 +45,7 @@ class CustomContext(object):
                 if isinstance(obj, list) and len(obj) == 1:
                     obj = obj[0]
                 if hasattr(obj, 'get'):
-                    obj = obj.get(dictPath.pop(), None)
+                    obj = obj.get(dictPath.pop())
                 else:
                     return None
             if not callable(obj):
@@ -194,6 +194,12 @@ class Interpreter(object):
         res = self.getValue(name)
         return len(res) > 0 and all(res)
 
+    def getGetLastCallParameters(self):
+        if self.callScopes:
+            return self.callScopes[0][0].params.keys()
+        else:
+            return []
+
 class MethodWrapper(object):
     def __init__(self, f):
         self.args = [n for n in inspect.getargspec(f).args if n != 'self']
@@ -203,20 +209,6 @@ class MethodWrapper(object):
         formName = lambda a: formParameterName(a) if a != 'content' else '#'
         params = dict((a, ip.getString(formName(a))) for a in self.args)
         return self.f(**params)
-
-def handleTagExceptions(f):
-    def wrapper(self, ip):
-        try:
-            return f(self, ip)
-        except TagAttributeMissing, e:
-            message = '[required attribute "%s" is missing]' % e.message
-        except TagNameInvalid, e:
-            if e.message:
-                message = '[tag name "%s" invalid]' % e.message
-            else:
-                message = '[missing tag name]'
-        return [message]
-    return wrapper
 
 class Template(object):
     ''' object for rendering markup which can be extended about parameters and functions
@@ -260,8 +252,7 @@ class Template(object):
              'If': self.If,
              'List': self.List,
              'Split': self.Split,
-             'PairTag': self.PairTag,
-             'EmptyTag': self.EmptyTag,
+             'html': TagGenerator(),
          }
 
     def _getStringBasedMethods(self):
@@ -311,61 +302,25 @@ class Template(object):
         else:
             return ip.getValue('#Else', [])
 
-    def _getTagAttributes(self, ip):
-        def parseAttributes(attributeString):
-            attributes = (a for a in attributeString.split(','))
-            attributes = (a.strip() for a in attributes)
-            attributes = (a for a in attributes if a)
-            return attributes
+class TagGenerator:
+    TAG_NAME_RE = re.compile(r'^[a-zA-Z0-9]+(:[a-zA-Z0-9]+)?$')
 
-        def evaluateAttributes(attributes):
-            return [(a, ip.getString(formParameterName(a))) for a in attributes]
-
-        def evaluateAttributeList(listName):
-            attrString = ip.getString(listName)
-            attrList = parseAttributes(attrString)
-            return evaluateAttributes(attrList)
-
-        requiredPairs = evaluateAttributeList('#Required')
-        missingRequired = [a for a, v in requiredPairs if not v]
-        if missingRequired:
-            raise TagAttributeMissing(formParameterName(missingRequired[0]))
-        optionalPairs = evaluateAttributeList('#Optional')
-        return list(chain(requiredPairs, optionalPairs))
-
-    def _getTagName(self, ip):
-        name = ip.getString('#Name').strip()
-        if not TAG_NAME_RE.match(name):
-            raise TagNameInvalid(name)
-        return name
-
-    @handleTagExceptions
-    def PairTag(self, ip):
-        name = self._getTagName(ip)
-        attributes = self._getTagAttributes(ip)
-        content = ip.getValue('#', [])
-        return list(chain(('<', name, joinAttributes(attributes), '>'), content, ('</', name, '>')))
-
-    @handleTagExceptions
-    def EmptyTag(self, ip):
-        name = self._getTagName(ip)
-        attributes = self._getTagAttributes(ip)
-        return ['<', name, joinAttributes(attributes), '/>']
-
-TAG_NAME_RE = re.compile(r'^[a-zA-Z0-9]+(:[a-zA-Z0-9]+)?$')
-
-class TagFormatError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self)
-        self.message = message
-
-class TagNameInvalid(TagFormatError): pass
-class TagAttributeMissing(TagFormatError): pass
+    def get(self, name):
+        def wrapper(ip):
+            attributes = ip.getGetLastCallParameters()
+            if not self.TAG_NAME_RE.match(name):
+                return '[tag name "%s" invalid]' % name
+            attrList = [(a, ip.getString(a)) for a in attributes if a != '#']
+            if '#' in attributes:
+                content = ip.getString('#')
+                return list(chain(('<', name, joinAttributes(attrList), '>'), content, ('</', name, '>')))
+            else:
+                return ['<', name, joinAttributes(attrList), '/>']
+        return wrapper
 
 def joinAttributes(attributes):
-    return ''.join(' %s="%s"' % (a, escapeHtml(v))
+    return ''.join(' %s="%s"' % (a[1:], escapeHtml(v))
         for a, v in attributes if v)
-
 
 def escapeHtml(s):
     s = s.replace('&', '&amp;')
